@@ -37,27 +37,29 @@ void showDialogGameOver(BuildContext context, String message,
     builder: (BuildContext context) {
       return AlertDialog(
         backgroundColor: Colors.amber[700],
-        
         title: const Text('Game Over', style: TextStyle(fontSize: 25)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(message, style: const TextStyle(fontSize: 20,color: Colors.white)),
+            Text(message,
+                style: const TextStyle(fontSize: 20, color: Colors.white)),
             if (score != null) ...[
               const SizedBox(height: 10),
               Text(
                 'Score: $score',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold,color: Colors.white),
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
             ],
           ],
         ),
         actions: [
           TextButton(
-            child: const Text('OK', style: TextStyle(fontSize: 20,color: Colors.white)),
+            child: const Text('OK',
+                style: TextStyle(fontSize: 20, color: Colors.white)),
             onPressed: () {
-              Navigator.of(context).pop();
               onClose?.call();
             },
           ),

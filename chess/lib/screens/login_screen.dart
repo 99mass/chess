@@ -9,7 +9,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final email = TextEditingController();
+  final userName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -32,26 +32,23 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: 200,
+                  width: 300,
                   child: CustomTextField(
-                    controller: email,
-                    hintText: 'Email',
+                    controller: userName,
+                    hintText: 'Enter your username',
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
+                        return 'Please enter your username';
                       }
-                      final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                      if (!emailRegex.hasMatch(value)) {
-                        return 'Please enter a valid email';
-                      }
+      
                       return null;
                     },
                   ),
                 ),
                 const SizedBox(height: 16.0),
                 SizedBox(
-                  width: 200,
-                  height: 40,
+                  width: 300,
+                  height: 60,
                   child: ElevatedButton(
                     onPressed: () {
                       // if (_formKey.currentState?.validate() ?? false) {
@@ -69,14 +66,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8.0),
                       ),
-                      // padding: const EdgeInsets.symmetric(vertical: 12.0),
                       shadowColor: Colors.black.withOpacity(0.3),
                       elevation: 8,
                     ),
                     child: const Text(
-                      'Continuer',
+                      'Get Started',
                       style: TextStyle(
-                        fontSize: 16.0,
+                        fontSize: 20.0,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
@@ -117,9 +113,9 @@ class CustomTextField extends StatelessWidget {
       validator: validator,
       decoration: InputDecoration(
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10.0, vertical: 0.0),
+            const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
         hintText: hintText,
-        hintStyle: TextStyle(color: Colors.black.withOpacity(.6)),
+        hintStyle: const TextStyle(color: Colors.black),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: Colors.black.withOpacity(.8)),
           borderRadius: BorderRadius.circular(4.0),

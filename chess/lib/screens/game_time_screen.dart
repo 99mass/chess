@@ -199,6 +199,8 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
                 gameProvider.setPlayerColor(
                     player: selectedColor == PlayerColor.white ? 0 : 1);
                 gameProvider.setIsloadind(value: true);
+                gameProvider.setIsGameEnd(value: false);
+                
                 // Naviguer vers l'écran de jeu avec le temps et la difficulté sélectionnés
                 Navigator.pushReplacement(
                   context,

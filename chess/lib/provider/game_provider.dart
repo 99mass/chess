@@ -16,9 +16,9 @@ class GameProvider extends ChangeNotifier {
   bool _aiThinking = false;
   bool _flipBoard = false;
   bool _computerMode = false;
-  bool _onLineMode = false;
-  bool _friendrMode = false;
+  bool _friendsMode = false;
   bool _isLoading = false;
+  bool _isGameEnd = false;
 
   int _player = Squares.white;
   PlayerColor _playerColor = PlayerColor.white;
@@ -34,9 +34,9 @@ class GameProvider extends ChangeNotifier {
   bool get aiThinking => _aiThinking;
   bool get flipBoard => _flipBoard;
   bool get computerMode => _computerMode;
-  bool get onLineMode => _onLineMode;
-  bool get friendMode => _friendrMode;
+  bool get friendsMode => _friendsMode;
   bool get isloading => _isLoading;
+  bool get isGameEnd => _isGameEnd;
   int get player => _player;
   PlayerColor get playerColor => _playerColor;
   GameDifficulty get gameDifficulty => _gameDifficulty;
@@ -65,37 +65,34 @@ class GameProvider extends ChangeNotifier {
     });
   }
 
-  bool makeStringMove(String bestMove) {
-    bool result = game.makeMoveString(bestMove);
+  Future<bool> makeSquaresMove(Move move,
+      {required BuildContext context, ChessTimer? chessTimer}) async {
+    bool result = game.makeSquaresMove(move);
+
+    handleGameOver(context, chessTimer: chessTimer);
+
     notifyListeners();
     return result;
   }
 
-  Future<bool> makeSquaresMove(Move move,
-      {required BuildContext context}) async {
-    bool result = game.makeSquaresMove(move);
+  Future<bool> makeStringMove(String bestMove,
+      {required BuildContext context, ChessTimer? chessTimer}) async {
+    bool result = game.makeMoveString(bestMove);
 
-    print(
-        'Game state: gameOver=${game.gameOver}, drawn=${game.drawn}, winner=${game.winner}');
-    print('Game result: ${game.eliminated}');
-    // Modification importante
-    if (isStalemate()) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showDialogGameOver(context, 'Stalemate! The game is a draw.',
-            score: '1/2 - 1/2', onClose: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-          );
-        });
-      });
-    } else if (game.drawn || game.gameOver) {
-      print('DRAW CONDITION DETECTED!');
+    handleGameOver(context, chessTimer: chessTimer);
+
+    notifyListeners();
+    return result;
+  }
+
+  void handleGameOver(BuildContext context, {ChessTimer? chessTimer}) {
+    if (game.drawn || game.gameOver) {
+      _isGameEnd = true;
 
       String message = 'Game Over!';
       String? score;
 
       if (game.drawn) {
-        print('DRAW SPECIFICS');
         if (game.result == 'DrawnGameStalemate') {
           message = 'Stalemate! The game is a draw.';
           score = '1/2 - 1/2';
@@ -114,7 +111,6 @@ class GameProvider extends ChangeNotifier {
         score = '0 - 1';
       }
 
-      // Utilisation d'une m thode statique pour le dialog
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
           showDialogGameOver(context, message, score: score, onClose: () {
@@ -127,14 +123,6 @@ class GameProvider extends ChangeNotifier {
         }
       });
     }
-
-    notifyListeners();
-    return result;
-  }
-
-  bool isStalemate() {
-    // Check if the current player has no possible moves
-    return _state.moves.isEmpty && !_game.gameOver;
   }
 
   Future<void> setSquareState() async {
@@ -162,13 +150,8 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setOnLineMode({required bool value}) {
-    _onLineMode = value;
-    notifyListeners();
-  }
-
-  void setFriendMode({required bool value}) {
-    _friendrMode = value;
+  void setFriendsMode({required bool value}) {
+    _friendsMode = value;
     notifyListeners();
   }
 
@@ -196,6 +179,11 @@ class GameProvider extends ChangeNotifier {
 
   void setWhitePlayerId({required int playerId}) {
     _whitePlayerId = playerId;
+    notifyListeners();
+  }
+
+  void setIsGameEnd({required bool value}) {
+    _isGameEnd = value;
     notifyListeners();
   }
 
@@ -259,6 +247,8 @@ class ChessTimer {
     showDialogGameOver(
         context, _whiteRemainingTime == 0 ? 'Black wins!' : 'White wins!',
         onClose: () {
+      stop();
+      dispose();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainMenuScreen()),
       );
@@ -267,8 +257,17 @@ class ChessTimer {
     onTimeExpired?.call();
   }
 
-  void dispose() {
+  void stop() {
     _activeTimer?.cancel();
+    onTimeExpired?.call();
+    _activeTimer = null;
+  }
+
+  void dispose() {
+    print('Disposing timer');
+    _activeTimer?.cancel();
+    onTimeExpired?.call();
+    _activeTimer = null;
   }
 
   String formatTime(int seconds) {
@@ -280,20 +279,5 @@ class ChessTimer {
   void reset() {
     _whiteRemainingTime = initialMinutes * 60;
     _blackRemainingTime = initialMinutes * 60;
-  }
-}
-
-// Extension method to integrate with existing GameProvider
-extension ChessTimerExtension on GameProvider {
-  void initializeTimer(BuildContext context, {VoidCallback? onTimeExpired}) {
-    final chessTimer = ChessTimer(
-        initialMinutes: gameTime,
-        onTimeExpired: () {
-          // Handle game end due to time
-          onTimeExpired?.call();
-        });
-
-    // Start timer
-    chessTimer.start(context: context, playerColor: playerColor);
   }
 }
