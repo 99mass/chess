@@ -12,11 +12,11 @@ class FriendListScreen extends StatefulWidget {
 class _FriendListScreenState extends State<FriendListScreen> {
   // Exemple de liste d'amis (à remplacer par votre logique de gestion des amis)
   final List<FriendModel> friendModels = [
-    const FriendModel(id: 1, userName: 'KnightMaster'),
-    const FriendModel(id: 2, userName: 'QueenSlayer'),
-    const FriendModel(id: 3, userName: 'BishopWizard'),
-    const FriendModel(id: 4, userName: 'RookDefender'),
-    const FriendModel(id: 5, userName: 'PawnPusher'),
+    const FriendModel(id: '1', userName: 'KnightMaster'),
+    const FriendModel(id: '2', userName: 'QueenSlayer'),
+    const FriendModel(id: '3', userName: 'BishopWizard'),
+    const FriendModel(id: '4', userName: 'RookDefender'),
+    const FriendModel(id: '5', userName: 'PawnPusher'),
   ];
 
   @override
@@ -51,7 +51,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => WaitingRoomScreen(friendId: friend.id),
+              builder: (context) => WaitingRoomScreen(friendId: int.parse(friend.id)),
             ),
           );
         },

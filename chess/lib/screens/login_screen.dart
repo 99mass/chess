@@ -1,5 +1,10 @@
+import 'dart:convert';
+
+import 'package:chess/model/friend_model.dart';
+import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -9,8 +14,61 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+
   final userName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  Future<void> _login() async {
+    if (_formKey.currentState?.validate() ?? false) {
+      try {
+        setState(() {
+          _isLoading = true;
+        });
+
+        // Vérifier si l'utilisateur existe
+        final response = await http.get(
+            Uri.parse('http://localhost:8080/user?username=${userName.text}'));
+
+        UserProfile? user;
+        if (response.statusCode == 200) {
+          // Utilisateur existant
+          user = UserProfile.fromJson(json.decode(response.body));
+        } else if (response.statusCode == 404) {
+          // Créer un nouvel utilisateur
+          final createResponse = await http.post(
+              Uri.parse('http://localhost:8080/user'),
+              body: json.encode({'username': userName.text}),
+              headers: {'Content-Type': 'application/json'});
+
+          if (createResponse.statusCode == 200) {
+            user = UserProfile.fromJson(json.decode(createResponse.body));
+          }
+        }
+
+        if (user != null) {
+          GameProvider gameProvider = GameProvider();
+          gameProvider.setUser(user);
+          // Naviguer vers l'écran principal
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const MainMenuScreen(),
+            ),
+          );
+        }
+      } catch (e) {
+        // Gérer les erreurs de connexion
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connection error: $e')),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your username';
                       }
-      
+
                       return null;
                     },
                   ),
@@ -50,17 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: 300,
                   height: 60,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // if (_formKey.currentState?.validate() ?? false) {
-                      //   // Handle sign in logic
-                      // }
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MainMenuScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: _login,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber.withOpacity(0.5),
                       shape: RoundedRectangleBorder(
@@ -69,17 +117,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       shadowColor: Colors.black.withOpacity(0.3),
                       elevation: 8,
                     ),
-                    child: const Text(
-                      'Get Started',
-                      style: TextStyle(
-                        fontSize: 20.0,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Get Started',
+                          style: TextStyle(
+                            fontSize: 20.0,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        if (_isLoading) const SizedBox(width: 8),
+                        if (_isLoading)
+                          const CircularProgressIndicator(
+                            color: Colors.black87,
+                          ),
+                      ],
                     ),
                   ),
                 ),
-                
               ],
             ),
           ),

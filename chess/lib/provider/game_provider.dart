@@ -4,8 +4,10 @@ import 'dart:async';
 
 import 'package:bishop/bishop.dart' as bishop;
 import 'package:chess/constant/constants.dart';
+import 'package:chess/model/friend_model.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/helper.dart';
+import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:square_bishop/square_bishop.dart';
 import 'package:squares/squares.dart';
@@ -28,6 +30,9 @@ class GameProvider extends ChangeNotifier {
   late int _blackPlayerId;
   int _currentPlayerId = -1;
 
+  // user
+  late UserProfile _userProfile = UserProfile(id: '', userName: '');
+
   // getters
   bishop.Game get game => _game;
   SquaresState get state => _state;
@@ -44,8 +49,20 @@ class GameProvider extends ChangeNotifier {
   int get whitePlayerId => _whitePlayerId;
   int get blackPlayerId => _blackPlayerId;
   int get currentPlayerId => _currentPlayerId;
-
+  // user
+  UserProfile get user => _userProfile;
+  Future<void> loadUser() async {
+    _userProfile = await SharedPreferencesStorage.instance.getUserLocally() ?? UserProfile(id: '', userName: '');
+    notifyListeners();
+  }
   // setters
+  // user
+  void setUser(UserProfile user) async {
+    _userProfile = user;
+    await SharedPreferencesStorage.instance.saveUserLocally(user);
+     notifyListeners();
+  }
+
   getPositionFen() {
     return game.fen;
   }
