@@ -40,4 +40,23 @@ class UserService {
       return null;
     }
   }
+
+  /// Met à jour le statut en ligne d'un utilisateur
+static Future<bool> updateUserOnlineStatus(String username, bool isOnline) async {
+  try {
+    final response = await http.post(
+      Uri.parse('${apiLink}users/online'), 
+      body: json.encode({
+        'username': username,
+        'is_online': isOnline
+      }),
+      headers: {'Content-Type': 'application/json'}
+    );
+
+    return response.statusCode == 200;
+  } catch (e) {
+    print('Error updating online status: $e');
+    return false;
+  }
+}
 }

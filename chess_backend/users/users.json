@@ -1,16 +1,34 @@
 {
   "users": {
+    "balde": {
+      "id": "486ac6f5141fa7af2616595946964441",
+      "username": "balde",
+      "is_online": false
+    },
     "breukh": {
       "id": "4839a9e03e0edb8c32721def96c7e712",
-      "username": "breukh"
+      "username": "breukh",
+      "is_online": true
+    },
+    "hello": {
+      "id": "f186493bb6493fe7b1ad545ed53a50c8",
+      "username": "hello",
+      "is_online": false
+    },
+    "massamba": {
+      "id": "9f8b8a77802f689f1459de5d9afb7bc2",
+      "username": "massamba",
+      "is_online": true
     },
     "omar": {
       "id": "7f6e1431ddaad0f0c7535904edafa6a7",
-      "username": "omar"
+      "username": "omar",
+      "is_online": false
     },
     "samba": {
       "id": "58e30f6490240b96679169c7badb0068",
-      "username": "samba"
+      "username": "samba",
+      "is_online": false
     }
   }
 }

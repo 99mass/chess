@@ -1,11 +1,43 @@
 import 'package:chess/screens/friend_list_screen.dart';
+import 'package:chess/services/web_socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_time_screen.dart';
 
-class MainMenuScreen extends StatelessWidget {
+class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
+
+  @override
+  // ignore: library_private_types_in_public_api
+  _MainMenuScreenState createState() => _MainMenuScreenState();
+}
+
+class _MainMenuScreenState extends State<MainMenuScreen> {
+  final WebSocketService _webSocketService = WebSocketService();
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Connecter le WebSocket lors de l'initialisation
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_webSocketService.isConnected) {
+        _webSocketService.connectWebSocket();
+        _webSocketService.onlineUsersStream.listen((users) {
+             print('Données reçues dans MainMenuScreen: $users');
+            
+          });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Déconnecter le WebSocket lors de la fermeture de l'écran
+    // _webSocketService.disconnect();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final user = await SharedPreferencesStorage.instance.getUserLocally();
-  runApp(
+  runApp( 
     MultiProvider(
       providers: [
         ChangeNotifierProvider(

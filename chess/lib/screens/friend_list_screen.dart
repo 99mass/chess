@@ -1,26 +1,45 @@
-import 'package:chess/model/friend_model.dart';
+import 'package:chess/provider/game_provider.dart';
+import 'package:chess/services/web_socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:chess/screens/waiting_room_screen.dart';
+import 'package:provider/provider.dart';
 
 class FriendListScreen extends StatefulWidget {
-  const FriendListScreen({Key? key}) : super(key: key);
+  const FriendListScreen({super.key});
 
   @override
   State<FriendListScreen> createState() => _FriendListScreenState();
 }
 
 class _FriendListScreenState extends State<FriendListScreen> {
-  // Exemple de liste d'amis (à remplacer par votre logique de gestion des amis)
-  final List<FriendModel> friendModels = [
-    const FriendModel(id: '1', userName: 'KnightMaster'),
-    const FriendModel(id: '2', userName: 'QueenSlayer'),
-    const FriendModel(id: '3', userName: 'BishopWizard'),
-    const FriendModel(id: '4', userName: 'RookDefender'),
-    const FriendModel(id: '5', userName: 'PawnPusher'),
-  ];
+  final WebSocketService _webSocketService = WebSocketService();
+  List<String> _onlineUsers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _webSocketService.connectWebSocket();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_webSocketService.isConnected) {
+        print('Connecté au WebSocket');
+        _webSocketService.onlineUsersStream.listen((users) {
+          print('Données reçues dans FriendListScreen: $users');
+          setState(() {
+            _onlineUsers = users;
+          });
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final gameProvider = context.read<GameProvider>();
     return Scaffold(
       backgroundColor: Colors.black87,
       appBar: AppBar(
@@ -36,100 +55,100 @@ class _FriendListScreenState extends State<FriendListScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: friendModels.length,
+        itemCount: _onlineUsers.length,
         itemBuilder: (context, index) {
-          return _buildFriendItem(friendModels[index]);
+          return gameProvider.user.userName != _onlineUsers[index]
+              ? _buildFriendItem(_onlineUsers[index])
+              : Container();
         },
       ),
     );
   }
 
-  Widget _buildFriendItem(FriendModel friend) {
-    return SingleChildScrollView(
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WaitingRoomScreen(friendId: int.parse(friend.id)),
-            ),
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            border: Border.all(color: Colors.amber[700]!, width: 1),
-            borderRadius: const BorderRadius.all(Radius.circular(8)),
+  Widget _buildFriendItem(String userName) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                WaitingRoomScreen(friendId: userName.hashCode),
           ),
-          child: Row(
-            children: [
-              const SizedBox(width: 16),
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(
-                    image: AssetImage('assets/avatar.png'),
-                    fit: BoxFit.cover,
-                  ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          border: Border.all(color: Colors.amber[700]!, width: 1),
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                image: DecorationImage(
+                  image: AssetImage('assets/avatar.png'),
+                  fit: BoxFit.cover,
                 ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        alignment: Alignment.center,
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: Colors.green[700],
-                          shape: BoxShape.circle,
-                          border:
-                              Border.all(width: 2, color: Colors.green[700]!),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '1',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white,
-                            ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      alignment: Alignment.center,
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.green[700],
+                        shape: BoxShape.circle,
+                        border: Border.all(width: 2, color: Colors.green[700]!),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '1',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      friend.userName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    userName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: Colors.white,
-                size: 30,
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: Colors.white,
+              size: 30,
+            ),
+            const SizedBox(width: 16),
+          ],
         ),
       ),
     );

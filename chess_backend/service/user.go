@@ -14,12 +14,17 @@ import (
 type UserProfile struct {
 	ID       string `json:"id"`
 	UserName string `json:"username"`
-	// Ajoutez d'autres champs si nécessaire
+	IsOnline bool   `json:"is_online"`
 }
 
 type UserStore struct {
 	Users map[string]UserProfile `json:"users"`
 	mutex sync.RWMutex
+}
+
+type OnlineStatusUpdate struct {
+	Username string `json:"username"`
+	IsOnline bool   `json:"is_online"`
 }
 
 func NewUserStore() *UserStore {
@@ -82,6 +87,21 @@ func (us *UserStore) GetUser(username string) (*UserProfile, error) {
 	}
 
 	return &user, nil
+}
+
+func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool) error {
+	us.mutex.Lock()
+	defer us.mutex.Unlock()
+
+	user, exists := us.Users[username]
+	if !exists {
+		return fmt.Errorf("user not found")
+	}
+
+	user.IsOnline = isOnline
+	us.Users[username] = user
+
+	return us.Save()
 }
 
 func CreateUserHandler(userStore *UserStore) http.HandlerFunc {
