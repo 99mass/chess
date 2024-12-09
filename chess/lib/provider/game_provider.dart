@@ -51,16 +51,21 @@ class GameProvider extends ChangeNotifier {
   int get currentPlayerId => _currentPlayerId;
   // user
   UserProfile get user => _userProfile;
+
   Future<void> loadUser() async {
-    _userProfile = await SharedPreferencesStorage.instance.getUserLocally() ?? UserProfile(id: '', userName: '');
+    _userProfile = await SharedPreferencesStorage.instance.getUserLocally() ??
+        UserProfile(id: '', userName: '');
+    print(
+        'Loaded user - ID: ${_userProfile.id}, Username: ${_userProfile.userName}');
     notifyListeners();
   }
+
   // setters
   // user
   void setUser(UserProfile user) async {
     _userProfile = user;
     await SharedPreferencesStorage.instance.saveUserLocally(user);
-     notifyListeners();
+    notifyListeners();
   }
 
   getPositionFen() {

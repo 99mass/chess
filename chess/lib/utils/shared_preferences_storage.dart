@@ -4,7 +4,8 @@ import 'package:chess/model/friend_model.dart';
 
 class SharedPreferencesStorage {
   SharedPreferencesStorage._privateConstructor();
-  static final SharedPreferencesStorage instance = SharedPreferencesStorage._privateConstructor();
+  static final SharedPreferencesStorage instance =
+      SharedPreferencesStorage._privateConstructor();
 
   static const String _userKey = 'user_profile';
 
@@ -12,6 +13,7 @@ class SharedPreferencesStorage {
   Future<void> saveUserLocally(UserProfile user) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+  
       await prefs.setString(_userKey, jsonEncode(user.toJson()));
     } catch (e) {
       print('Error saving user: $e');
@@ -23,7 +25,7 @@ class SharedPreferencesStorage {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userString = prefs.getString(_userKey);
-      
+
       if (userString != null) {
         final Map<String, dynamic> userMap = jsonDecode(userString);
         return UserProfile.fromJson(userMap);

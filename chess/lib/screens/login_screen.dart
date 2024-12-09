@@ -1,10 +1,11 @@
-import 'dart:convert';
-
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/services/user_service.dart';
+import 'package:chess/utils/shared_preferences_storage.dart';
+import 'package:chess/widgets/custom_text_field.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,7 +15,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-
   final userName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -26,41 +26,35 @@ class _LoginScreenState extends State<LoginScreen> {
           _isLoading = true;
         });
 
-        // Vérifier si l'utilisateur existe
-        final response = await http.get(
-            Uri.parse('http://localhost:8080/user?username=${userName.text}'));
+        UserProfile? user = await UserService.getUserByUsername(userName.text);
 
-        UserProfile? user;
-        if (response.statusCode == 200) {
-          // Utilisateur existant
-          user = UserProfile.fromJson(json.decode(response.body));
-        } else if (response.statusCode == 404) {
-          // Créer un nouvel utilisateur
-          final createResponse = await http.post(
-              Uri.parse('http://localhost:8080/user'),
-              body: json.encode({'username': userName.text}),
-              headers: {'Content-Type': 'application/json'});
-
-          if (createResponse.statusCode == 200) {
-            user = UserProfile.fromJson(json.decode(createResponse.body));
-          }
-        }
+        // If the user does not exist, create a new user
+        user ??= await UserService.createUser(userName.text);
 
         if (user != null) {
-          GameProvider gameProvider = GameProvider();
-          gameProvider.setUser(user);
-          // Naviguer vers l'écran principal
+          await SharedPreferencesStorage.instance.saveUserLocally(user);
+
+          Provider.of<GameProvider>(context, listen: false).setUser(user);
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => const MainMenuScreen(),
             ),
           );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to create or find user'),
+            ),
+          );
         }
       } catch (e) {
-        // Gérer les erreurs de connexion
+        print('Connection error: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Connection error: $e')),
+          const SnackBar(
+            content: Text('Unable to connect, check your network.'),
+          ),
         );
       } finally {
         setState(() {
@@ -97,6 +91,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your username';
+                      }
+
+                      if (value.length > 10 || value.length < 3) {
+                        return 'Username must be between 3 and 10 characters';
                       }
 
                       return null;
@@ -141,52 +139,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class CustomTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hintText;
-  final bool obscureText;
-  final FormFieldValidator<String>? validator;
-
-  const CustomTextField({
-    required this.controller,
-    required this.hintText,
-    this.obscureText = false,
-    this.validator,
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      cursorColor: Colors.black87,
-      style: const TextStyle(color: Colors.white),
-      controller: controller,
-      obscureText: obscureText,
-      validator: validator,
-      decoration: InputDecoration(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
-        hintText: hintText,
-        hintStyle: const TextStyle(color: Colors.black),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black.withOpacity(.8)),
-          borderRadius: BorderRadius.circular(4.0),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.grey.withOpacity(.8)),
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withOpacity(.8)),
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.5),
       ),
     );
   }

@@ -10,7 +10,6 @@ class MainMenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gameProvider = context.read<GameProvider>();
-
     return Scaffold(
       backgroundColor: Colors.black54,
       body: Center(
@@ -27,11 +26,10 @@ class MainMenuScreen extends StatelessWidget {
                 ),
               ),
             ),
-          
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 40), 
+                const SizedBox(height: 40),
                 _buildMenuButton(
                   'PLAYER vs COMPUTER',
                   onTap: () {
