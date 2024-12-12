@@ -1,3 +1,5 @@
+import 'package:chess/model/friend_model.dart';
+import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:flutter/material.dart';
@@ -12,34 +14,37 @@ class FriendListScreen extends StatefulWidget {
 }
 
 class _FriendListScreenState extends State<FriendListScreen> {
-  final WebSocketService _webSocketService = WebSocketService();
-  List<String> _onlineUsers = [];
+  late WebSocketService _webSocketService;
+  late Stream<List<UserProfile>> _onlineUsersStream;
 
   @override
   void initState() {
     super.initState();
-    _webSocketService.connectWebSocket();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_webSocketService.isConnected) {
-        print('Connecté au WebSocket');
-        _webSocketService.onlineUsersStream.listen((users) {
-          print('Données reçues dans FriendListScreen: $users');
-          setState(() {
-            _onlineUsers = users;
-          });
-        });
-      }
+
+    // Initialize WebSocket connection
+    _webSocketService = WebSocketService();
+    _webSocketService.connectWebSocket(context);
+    _onlineUsersStream = _webSocketService.onlineUsersStream;
+
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+
+    // Listen to invitations
+    _webSocketService.invitationStream.listen((invitation) {
+      _webSocketService.handleInvitationInteraction(
+          context, gameProvider.user, invitation);
     });
   }
 
   @override
   void dispose() {
+    _webSocketService.disposeInvitationStream();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final gameProvider = context.read<GameProvider>();
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+
     return Scaffold(
       backgroundColor: Colors.black87,
       appBar: AppBar(
@@ -53,26 +58,59 @@ class _FriendListScreenState extends State<FriendListScreen> {
         ),
         backgroundColor: Colors.amber[700],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _onlineUsers.length,
-        itemBuilder: (context, index) {
-          return gameProvider.user.userName != _onlineUsers[index]
-              ? _buildFriendItem(_onlineUsers[index])
-              : Container();
+      body: StreamBuilder<List<UserProfile>>(
+        stream: _onlineUsersStream,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(
+              child: Text(
+                'No other users online',
+                style: TextStyle(color: Colors.white),
+              ),
+            );
+          }
+
+          final onlineUsers = snapshot.data!;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            key: ValueKey(onlineUsers.length),
+            itemCount: onlineUsers.length,
+            itemBuilder: (context, index) {
+              final user = onlineUsers[index];
+              return gameProvider.user.id != user.id
+                  ? _buildFriendItem(context, user)
+                  : Container();
+            },
+          );
         },
       ),
     );
   }
 
-  Widget _buildFriendItem(String userName) {
+  Widget _buildFriendItem(BuildContext context, UserProfile user) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(
+        final gameProvider = Provider.of<GameProvider>(context, listen: false);
+        // Envoyer l'invitation de jeu
+        _webSocketService.sendGameInvitation(context,
+            toUser: user, currentUser: gameProvider.user);
+
+        // Navigate to waiting room
+        Navigator.of(context).pop(true);
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                WaitingRoomScreen(friendId: userName.hashCode),
+            builder: (context) => WaitingRoomScreen(
+              invitation: InvitationMessage(
+                type: 'invitation_send',
+                fromUserId: gameProvider.user.id,
+                fromUsername: gameProvider.user.userName,
+                toUserId: user.id,
+                toUsername: user.userName,
+                timestamp: DateTime.now().millisecondsSinceEpoch,
+              ),
+            ),
           ),
         );
       },
@@ -132,7 +170,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    userName,
+                    user.userName,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

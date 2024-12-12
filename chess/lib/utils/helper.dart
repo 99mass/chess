@@ -1,3 +1,4 @@
+import 'package:chess/provider/time_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:squares/squares.dart';
@@ -69,3 +70,5 @@ void showDialogGameOver(BuildContext context, String message,
     },
   );
 }
+
+

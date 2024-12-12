@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:bishop/bishop.dart' as bishop;
 import 'package:chess/constant/constants.dart';
 import 'package:chess/model/friend_model.dart';
+import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
@@ -55,8 +56,6 @@ class GameProvider extends ChangeNotifier {
   Future<void> loadUser() async {
     _userProfile = await SharedPreferencesStorage.instance.getUserLocally() ??
         UserProfile(id: '', userName: '');
-    print(
-        'Loaded user - ID: ${_userProfile.id}, Username: ${_userProfile.userName}');
     notifyListeners();
   }
 
@@ -67,6 +66,7 @@ class GameProvider extends ChangeNotifier {
     await SharedPreferencesStorage.instance.saveUserLocally(user);
     notifyListeners();
   }
+
 
   getPositionFen() {
     return game.fen;
@@ -217,89 +217,5 @@ class GameProvider extends ChangeNotifier {
   void setCurrentPlayerId({required int playerId}) {
     _currentPlayerId = playerId;
     notifyListeners();
-  }
-}
-
-class ChessTimer {
-  final int initialMinutes;
-  int _whiteRemainingTime;
-  int _blackRemainingTime;
-  Timer? _activeTimer;
-  bool _isWhiteTurn;
-  final VoidCallback? onTimeExpired;
-  final void Function()? onTimerUpdate;
-
-  ChessTimer({
-    required this.initialMinutes,
-    this.onTimeExpired,
-    this.onTimerUpdate,
-    bool startWithWhite = true,
-  })  : _whiteRemainingTime = initialMinutes * 60,
-        _blackRemainingTime = initialMinutes * 60,
-        _isWhiteTurn = startWithWhite;
-
-  int get whiteRemainingTime => _whiteRemainingTime;
-  int get blackRemainingTime => _blackRemainingTime;
-  bool get isWhiteTurn => _isWhiteTurn;
-
-  void start(
-      {required BuildContext context, required PlayerColor playerColor}) {
-    _activeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_isWhiteTurn == (playerColor == PlayerColor.white)) {
-        _whiteRemainingTime--;
-        if (_whiteRemainingTime <= 0) {
-          _handleTimeExpired(context);
-        }
-      } else {
-        _blackRemainingTime--;
-        if (_blackRemainingTime <= 0) {
-          _handleTimeExpired(context);
-        }
-      }
-
-      onTimerUpdate?.call();
-    });
-  }
-
-  void switchTurn() {
-    _isWhiteTurn = !_isWhiteTurn;
-  }
-
-  void _handleTimeExpired(BuildContext context) {
-    showDialogGameOver(
-        context, _whiteRemainingTime == 0 ? 'Black wins!' : 'White wins!',
-        onClose: () {
-      stop();
-      dispose();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-      );
-    });
-    _activeTimer?.cancel();
-    onTimeExpired?.call();
-  }
-
-  void stop() {
-    _activeTimer?.cancel();
-    onTimeExpired?.call();
-    _activeTimer = null;
-  }
-
-  void dispose() {
-    print('Disposing timer');
-    _activeTimer?.cancel();
-    onTimeExpired?.call();
-    _activeTimer = null;
-  }
-
-  String formatTime(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
-
-  void reset() {
-    _whiteRemainingTime = initialMinutes * 60;
-    _blackRemainingTime = initialMinutes * 60;
   }
 }

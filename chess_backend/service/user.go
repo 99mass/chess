@@ -8,24 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
-
-type UserProfile struct {
-	ID       string `json:"id"`
-	UserName string `json:"username"`
-	IsOnline bool   `json:"is_online"`
-}
-
-type UserStore struct {
-	Users map[string]UserProfile `json:"users"`
-	mutex sync.RWMutex
-}
-
-type OnlineStatusUpdate struct {
-	Username string `json:"username"`
-	IsOnline bool   `json:"is_online"`
-}
 
 func NewUserStore() *UserStore {
 	return &UserStore{

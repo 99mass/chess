@@ -1,5 +1,15 @@
 {
   "users": {
+    "Pixel 5": {
+      "id": "82b66768b8cdc8cac4808d9f1720fb7a",
+      "username": "Pixel 5",
+      "is_online": true
+    },
+    "Pixel 6": {
+      "id": "7d2ce7f2b14a2b0016f5e9342b6bd019",
+      "username": "Pixel 6",
+      "is_online": true
+    },
     "balde": {
       "id": "486ac6f5141fa7af2616595946964441",
       "username": "balde",
@@ -8,7 +18,7 @@
     "breukh": {
       "id": "4839a9e03e0edb8c32721def96c7e712",
       "username": "breukh",
-      "is_online": true
+      "is_online": false
     },
     "hello": {
       "id": "f186493bb6493fe7b1ad545ed53a50c8",
@@ -18,7 +28,7 @@
     "massamba": {
       "id": "9f8b8a77802f689f1459de5d9afb7bc2",
       "username": "massamba",
-      "is_online": true
+      "is_online": false
     },
     "omar": {
       "id": "7f6e1431ddaad0f0c7535904edafa6a7",

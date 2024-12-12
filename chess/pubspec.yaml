@@ -41,8 +41,7 @@ dependencies:
   web_socket_channel: ^2.4.0
   cupertino_icons: ^1.0.8
   http: ^1.2.2
-  # path: ^1.9.0
-  # path_provider: ^2.1.5
+  rxdart: ^0.27.5
   shared_preferences: ^2.3.3
 
 dev_dependencies:

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:chess/constant/constants.dart';
 import 'package:chess/provider/game_provider.dart';
+import 'package:chess/provider/time_provider.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/stockfish_uic_command.dart';
 import 'package:flutter/material.dart';

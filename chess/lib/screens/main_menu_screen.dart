@@ -14,34 +14,36 @@ class MainMenuScreen extends StatefulWidget {
 }
 
 class _MainMenuScreenState extends State<MainMenuScreen> {
-  final WebSocketService _webSocketService = WebSocketService();
+  late WebSocketService _webSocketService;
 
   @override
   void initState() {
     super.initState();
 
-    // Connecter le WebSocket lors de l'initialisation
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_webSocketService.isConnected) {
-        _webSocketService.connectWebSocket();
-        _webSocketService.onlineUsersStream.listen((users) {
-             print('Données reçues dans MainMenuScreen: $users');
-            
-          });
-      }
+    // Initialise WebSocketService
+    _webSocketService = WebSocketService();
+    _webSocketService.connectWebSocket(context);
+
+    // Load user from game provider
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.loadUser();
+
+    // Listen to invitations
+    _webSocketService.invitationStream.listen((invitation) {
+      _webSocketService.handleInvitationInteraction(
+          context, gameProvider.user, invitation);
     });
   }
 
   @override
   void dispose() {
-    // Déconnecter le WebSocket lors de la fermeture de l'écran
-    // _webSocketService.disconnect();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final gameProvider = context.read<GameProvider>();
+
     return Scaffold(
       backgroundColor: Colors.black54,
       body: Center(

@@ -8,13 +8,13 @@ import 'package:provider/provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final user = await SharedPreferencesStorage.instance.getUserLocally();
-  runApp( 
+  runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (_) => GameProvider()..loadUser(),
         ),
-      ],
+      ], 
       child: MyApp(
           initialScreen: user == null || user.userName == "" || user.id == ""
               ? const LoginScreen()

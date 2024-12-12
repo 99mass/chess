@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"time"
 )
@@ -23,4 +24,14 @@ func GenerateUniqueID() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
+}
+
+// Optional: Method to log invitation details
+func (m *OnlineUsersManager) LogInvitation(invitation InvitationMessage) {
+	// Implement logging or persistence of invitations
+	log.Printf("Invitation: %s from %s to %s ",
+		invitation.Type,
+		invitation.FromUsername,
+		invitation.ToUsername,
+	)
 }
