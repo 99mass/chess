@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/invitation_model.dart';
+import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_board_screen.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/api_link.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chess/services/user_service.dart';
 
@@ -86,6 +88,10 @@ class WebSocketService {
                   .map((userJson) => UserProfile.fromJson(userJson))
                   .toList();
 
+          print('Nombre d\'utilisateurs reçus : ${onlineUsers.length}');
+          print(
+              'Utilisateurs : ${onlineUsers.map((u) => u.userName).toList()} | isInRoom: ${onlineUsers.map((u) => u.isInRoom).toList()}');
+
           final uniqueUsers = onlineUsers.toSet().toList();
           _onlineUsersController.add(uniqueUsers);
           break;
@@ -97,7 +103,10 @@ class WebSocketService {
         case 'game_start':
           if (context != null) {
             final gameData = json.decode(data['content']);
-            _navigateToGameBoard(context, gameData);
+            Provider.of<GameProvider>(context, listen: false)
+                .initializeMultiplayerGame(gameData);
+            print('Game data: $gameData');
+            _navigateToGameBoard(context);
           }
           break;
 
@@ -113,6 +122,27 @@ class WebSocketService {
             final invitation =
                 InvitationMessage.fromJson(json.decode(data['content']));
             _handleInvitationCancel(context, invitation);
+          }
+          break;
+        case 'room_closed':
+          if (context != null) {
+            final Map<String, dynamic> roomData = json.decode(data['content']);
+            final fromUsername = roomData['fromUsername'];
+            print('fromUsername: $fromUsername');
+
+            // Show notification and redirect
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$fromUsername has left the game.'),
+            ));
+            Timer(const Duration(seconds: 3), () {
+              // Redirect to MainMenuScreen
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MainMenuScreen(),
+                ),
+              );
+            });
           }
           break;
 
@@ -222,6 +252,7 @@ class WebSocketService {
       InvitationMessage invitation) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Game Invitation'),
@@ -259,18 +290,11 @@ class WebSocketService {
 
   void _navigateToGameBoard(
     BuildContext context,
-    Map<String, dynamic> gameData,
   ) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => const GameBoardScreen(
-            // roomId: gameData['room_id'],
-            // isWhitePlayer: gameData['white_player'] == currentUser.userName,
-            // opponent: gameData['white_player'] == currentUser.userName
-            //     ? gameData['black_player']
-            //     : gameData['white_player'],
-            ),
+        builder: (context) => const GameBoardScreen(),
       ),
     );
   }

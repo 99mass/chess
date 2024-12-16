@@ -54,7 +54,7 @@ func (m *OnlineUsersManager) HandleConnection(w http.ResponseWriter, r *http.Req
 	m.mutex.Unlock()
 
 	// Mettre à jour le statut en ligne
-	m.userStore.UpdateUserOnlineStatus(username, true)
+	m.userStore.UpdateUserOnlineStatus(username, true,false)
 
 	// Notifier tous les clients de la nouvelle connexion
 	m.broadcastOnlineUsers()
@@ -72,7 +72,7 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 		m.mutex.Unlock()
 
 		// Mettre à jour le statut hors ligne
-		m.userStore.UpdateUserOnlineStatus(username, false)
+		m.userStore.UpdateUserOnlineStatus(username, false,false)
 
 		// Notifier les autres clients
 		m.broadcastOnlineUsers()
@@ -96,22 +96,17 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 				Type:    "online_users",
 				Content: string(mustJson(onlineUsers)),
 			})
-		case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel":
+		case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel", "room_leave":
 			var invitation InvitationMessage
 			if err := json.Unmarshal([]byte(message.Content), &invitation); err != nil {
 				log.Printf("Error parsing invitation: %v", err)
 				continue
 			}
 
-			// Additional security check
-			if invitation.FromUsername != username {
-				log.Printf("Unauthorized invitation attempt by %s", username)
-				continue
-			}
-
 			if err := m.handleInvitation(invitation); err != nil {
 				log.Printf("Failed to process invitation: %v", err)
 			}
+		
 
 		default:
 			log.Printf("Unhandled message type: %s", message.Type)
@@ -119,18 +114,28 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 	}
 }
 
-// Modify handleInvitation to create and manage rooms
 func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) error {
 	m.mutex.RLock()
-	toConn, exists := m.connections[invitation.ToUsername]
+	_, fromExists := m.connections[invitation.FromUsername]
+	toConn, toExists := m.connections[invitation.ToUsername]
 	m.mutex.RUnlock()
 
-	if !exists {
+	if invitation.Type == RoomLeave && !fromExists {
+        log.Printf("Cannot process room leave: user %s not online", invitation.FromUsername)
+        return fmt.Errorf("user not online")
+    }
+
+	if !toExists {
 		return fmt.Errorf("user not online")
 	}
 
 	switch invitation.Type {
 	case InvitationSend:
+
+		// Mettre à jour le statut de la room pour les joueurs
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, true)
+		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
+
 		// Generate room ID if not provided
 		if invitation.RoomID == "" {
 			invitation.RoomID = GenerateUniqueID()
@@ -150,6 +155,10 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 
 	case InvitationAccept:
+		// Les deux joueurs sont maintenant dans la room
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, true)
+		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, true)
+
 		// Retrieve the room
 		room, exists := m.roomManager.GetRoom(invitation.RoomID)
 		if !exists {
@@ -159,6 +168,19 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		// Update room status
 		room.Status = RoomStatusInGame
 
+		// Initialiser l'état du jeu de base
+		room.PositionFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" // Position standard des échecs
+		room.IsWhitesTurn = true
+		room.IsGameOver = false
+		room.BoardState = ""
+		room.WhitesTime = "60" // 1h par défaut
+		room.BlacksTime = "60"
+		room.Moves = []Move{} // Liste des mouvements vide au début
+		room.GameCreatorUID = invitation.FromUsername
+		room.WinnerID = ""
+		room.WhitesCurrentMove = ""
+		room.BlacksCurrentMove = ""
+
 		// Broadcast to both players that the game is starting
 		fromConn, fromExists := m.connections[invitation.FromUsername]
 		toConn, toExists := m.connections[invitation.ToUsername]
@@ -166,10 +188,23 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		if fromExists && toExists {
 			startMessage := WebSocketMessage{
 				Type: "game_start",
-				Content: string(mustJson(map[string]string{
-					"room_id":      invitation.RoomID,
-					"white_player": invitation.FromUsername,
-					"black_player": invitation.ToUsername,
+				Content: string(mustJson(map[string]interface{}{
+					"gameId":            invitation.RoomID,
+					"gameCreatorUid":    invitation.FromUserID,
+					"userId":            invitation.ToUserID,
+					"opponentUsername": invitation.ToUsername,
+					"positonFen":        room.PositionFEN,
+					"winnerId":          "", 
+					"whitesTime":        room.WhitesTime,
+					"blacksTime":        room.BlacksTime,
+					"whitsCurrentMove":  "", 
+					"blacksCurrentMove": "", 
+					"boardState":        room.BoardState,
+					"playState":         string(room.Status),
+					"isWhitesTurn":      room.IsWhitesTurn,
+					"isGameOver":        room.IsGameOver,
+					"squareState":       room.SquareState,
+					"moves":             room.Moves,
 				})),
 			}
 
@@ -178,6 +213,9 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 
 	case InvitationReject:
+		// Sortir de la room
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
+		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
 		// Remove the room
 		m.roomManager.RemoveRoom(invitation.RoomID)
 		// Notifier l'expéditeur du rejet
@@ -189,8 +227,11 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 			}
 			fromConn.WriteJSON(rejectionMessage)
 		}
-	case InvitationCancel: 
-		
+	case InvitationCancel:
+		// Sortir de la room
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
+		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
+
 		m.roomManager.RemoveRoom(invitation.RoomID)
 
 		// Notifier le destinataire de l'annulation
@@ -204,6 +245,10 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 
 	case RoomLeave:
+		log.Printf("RoomLeave: Samba...",)
+		// Sortir de la room
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
+		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
 		// Handle room leaving
 		_, exists := m.roomManager.GetRoom(invitation.RoomID)
 		if !exists {
@@ -220,32 +265,37 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 	return nil
 }
 
-// Notify other player when room is closed
-func (m *OnlineUsersManager) notifyRoomClosure(invitation InvitationMessage) {
-	var otherUsername string
-	if invitation.FromUsername == invitation.ToUsername {
-		return
-	}
-	if invitation.FromUsername == invitation.ToUsername {
-		otherUsername = invitation.FromUsername
-	} else {
-		otherUsername = invitation.ToUsername
+func (us *UserStore) UpdateUserRoomStatus(username string, isInRoom bool) error {
+	us.mutex.Lock()
+	defer us.mutex.Unlock()
+
+	user, exists := us.Users[username]
+	if !exists {
+		return fmt.Errorf("user not found")
 	}
 
-	conn, exists := m.connections[otherUsername]
-	if exists {
-		closureMessage := WebSocketMessage{
-			Type: "room_closed",
-			Content: string(mustJson(map[string]string{
-				"room_id": invitation.RoomID,
-				"reason":  "player_left",
-			})),
-		}
-		conn.WriteJSON(closureMessage)
-	}
+	user.IsInRoom = isInRoom
+	us.Users[username] = user
+
+	return us.Save()
 }
 
-// exclude players in active rooms
+// Notify other player when room is closed
+func (m *OnlineUsersManager) notifyRoomClosure(invitation InvitationMessage) {
+
+    conn, exists := m.connections[invitation.ToUsername]
+    if exists {
+        closureMessage := WebSocketMessage{
+            Type: "room_closed",
+            Content: string(mustJson(map[string]string{
+                "room_id":  invitation.RoomID,
+                "fromUsername": invitation.FromUsername, 
+            })),
+        }
+        conn.WriteJSON(closureMessage)
+    }
+}
+
 func (m *OnlineUsersManager) broadcastOnlineUsers() {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
@@ -253,25 +303,13 @@ func (m *OnlineUsersManager) broadcastOnlineUsers() {
 	// Prepare the list of online users
 	onlineUsers := make([]OnlineUser, 0, len(m.connections))
 	for username := range m.connections {
-		// Check if user is in an active room
-		inActiveRoom := false
-		for _, room := range m.roomManager.rooms {
-			if room.WhitePlayer.Username == username ||
-				room.BlackPlayer.Username == username {
-				inActiveRoom = true
-				break
-			}
-		}
-
-		// Only add user if not in an active room
-		if !inActiveRoom {
-			user, err := m.userStore.GetUser(username)
-			if err == nil {
-				onlineUsers = append(onlineUsers, OnlineUser{
-					ID:       user.ID,
-					Username: user.UserName,
-				})
-			}
+		user, err := m.userStore.GetUser(username)
+		if err == nil {
+			onlineUsers = append(onlineUsers, OnlineUser{
+				ID:       user.ID,
+				Username: user.UserName,
+				IsInRoom: user.IsInRoom,
+			})
 		}
 	}
 
@@ -283,8 +321,15 @@ func (m *OnlineUsersManager) broadcastOnlineUsers() {
 
 	// Send to all connected clients
 	for _, conn := range m.connections {
-		conn.WriteJSON(message)
+		err := conn.WriteJSON(message)
+		if err != nil {
+			log.Printf("Error broadcasting to client: %v", err)
+		}
 	}
+
+	// Log for debugging
+	log.Printf("Broadcasting %d online users", len(onlineUsers))
+	log.Printf("Online users: %+v", onlineUsers)
 }
 
 func (m *OnlineUsersManager) getCurrentOnlineUsers() []OnlineUser {
@@ -298,6 +343,7 @@ func (m *OnlineUsersManager) getCurrentOnlineUsers() []OnlineUser {
 			onlineUsers = append(onlineUsers, OnlineUser{
 				ID:       user.ID,
 				Username: user.UserName,
+				IsInRoom: user.IsInRoom,
 			})
 		}
 	}

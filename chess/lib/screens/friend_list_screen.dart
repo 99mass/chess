@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/game_provider.dart';
@@ -16,6 +18,7 @@ class FriendListScreen extends StatefulWidget {
 class _FriendListScreenState extends State<FriendListScreen> {
   late WebSocketService _webSocketService;
   late Stream<List<UserProfile>> _onlineUsersStream;
+  List<UserProfile> onlineUsers = [];
 
   @override
   void initState() {
@@ -23,7 +26,12 @@ class _FriendListScreenState extends State<FriendListScreen> {
 
     // Initialize WebSocket connection
     _webSocketService = WebSocketService();
-    _webSocketService.connectWebSocket(context);
+    _webSocketService.connectWebSocket(context).then((_) {
+      // Une fois la connexion établie, demander explicitement la liste des utilisateurs
+      _webSocketService
+          .sendMessage(json.encode({'type': 'request_online_users'}));
+    });
+
     _onlineUsersStream = _webSocketService.onlineUsersStream;
 
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
@@ -48,19 +56,17 @@ class _FriendListScreenState extends State<FriendListScreen> {
     return Scaffold(
       backgroundColor: Colors.black87,
       appBar: AppBar(
-        title: const Text(
-          'Friend List',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-            fontSize: 24,
-          ),
-        ),
+        title: const Text('Friend List'),
         backgroundColor: Colors.amber[700],
       ),
       body: StreamBuilder<List<UserProfile>>(
         stream: _onlineUsersStream,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          onlineUsers = [];
+          print('snapshot users: ${snapshot.data!.length}');
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(
               child: Text(
@@ -70,17 +76,34 @@ class _FriendListScreenState extends State<FriendListScreen> {
             );
           }
 
-          final onlineUsers = snapshot.data!;
+          for (var user in snapshot.data!) {
+            if (gameProvider.user.id != user.id) {
+              if (!user.isInRoom) {
+                onlineUsers.add(user);
+              }
+            }
+          }
+          print('Online users: ${onlineUsers.length}');
+          // final onlineUsers = snapshot.data!
+          //     .where((user) =>
+          //         gameProvider.user.id != user.id &&
+          //         !user.isInRoom )
+          //     .toList();
+
+          if (onlineUsers.isEmpty) {
+            return const Center(
+              child: Text(
+                'No other users online',
+                style: TextStyle(color: Colors.white),
+              ),
+            );
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            key: ValueKey(onlineUsers.length),
             itemCount: onlineUsers.length,
             itemBuilder: (context, index) {
-              final user = onlineUsers[index];
-              return gameProvider.user.id != user.id
-                  ? _buildFriendItem(context, user)
-                  : Container();
+              return _buildFriendItem(context, onlineUsers[index]);
             },
           );
         },
@@ -95,6 +118,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
         // Envoyer l'invitation de jeu
         _webSocketService.sendGameInvitation(context,
             toUser: user, currentUser: gameProvider.user);
+        gameProvider.setOpponentUsername(username: user.userName);
 
         // Navigate to waiting room
         Navigator.of(context).pop(true);

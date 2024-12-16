@@ -72,7 +72,7 @@ func (us *UserStore) GetUser(username string) (*UserProfile, error) {
 	return &user, nil
 }
 
-func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool) error {
+func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool,isInRoom bool) error {
 	us.mutex.Lock()
 	defer us.mutex.Unlock()
 
@@ -82,6 +82,7 @@ func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool) erro
 	}
 
 	user.IsOnline = isOnline
+	user.IsInRoom=isInRoom
 	us.Users[username] = user
 
 	return us.Save()

@@ -1,44 +1,58 @@
 {
   "users": {
+    "Breukh": {
+      "id": "3a66e52ad5de4ecd4ba8fbe3026bb325",
+      "username": "Breukh",
+      "isnOline": true,
+      "isInRoom": false
+    },
     "Pixel 5": {
       "id": "82b66768b8cdc8cac4808d9f1720fb7a",
       "username": "Pixel 5",
-      "is_online": true
+      "isnOline": true,
+      "isInRoom": false
     },
     "Pixel 6": {
       "id": "7d2ce7f2b14a2b0016f5e9342b6bd019",
       "username": "Pixel 6",
-      "is_online": true
+      "isnOline": true,
+      "isInRoom": true
     },
     "balde": {
       "id": "486ac6f5141fa7af2616595946964441",
       "username": "balde",
-      "is_online": false
+      "isnOline": false,
+      "isInRoom": false
     },
     "breukh": {
       "id": "4839a9e03e0edb8c32721def96c7e712",
       "username": "breukh",
-      "is_online": false
+      "isnOline": false,
+      "isInRoom": false
     },
     "hello": {
       "id": "f186493bb6493fe7b1ad545ed53a50c8",
       "username": "hello",
-      "is_online": false
+      "isnOline": false,
+      "isInRoom": false
     },
     "massamba": {
       "id": "9f8b8a77802f689f1459de5d9afb7bc2",
       "username": "massamba",
-      "is_online": false
+      "isnOline": false,
+      "isInRoom": false
     },
     "omar": {
       "id": "7f6e1431ddaad0f0c7535904edafa6a7",
       "username": "omar",
-      "is_online": false
+      "isnOline": false,
+      "isInRoom": false
     },
     "samba": {
       "id": "58e30f6490240b96679169c7badb0068",
       "username": "samba",
-      "is_online": false
+      "isnOline": false,
+      "isInRoom": false
     }
   }
 }

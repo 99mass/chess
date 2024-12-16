@@ -9,7 +9,8 @@ import (
 type UserProfile struct {
 	ID       string `json:"id"`
 	UserName string `json:"username"`
-	IsOnline bool   `json:"is_online"`
+	IsOnline bool   `json:"isnOline"`
+	IsInRoom   bool   `json:"isInRoom"`
 }
 
 type UserStore struct {
@@ -39,6 +40,7 @@ type OnlineUsersManager struct {
 type OnlineUser struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
+	IsInRoom bool   `json:"isInRoom"`
 }
 
 // Types de messages pour les invitations

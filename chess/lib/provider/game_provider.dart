@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:bishop/bishop.dart' as bishop;
 import 'package:chess/constant/constants.dart';
 import 'package:chess/model/friend_model.dart';
+import 'package:chess/model/game_model.dart';
 import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/helper.dart';
@@ -66,7 +67,6 @@ class GameProvider extends ChangeNotifier {
     await SharedPreferencesStorage.instance.saveUserLocally(user);
     notifyListeners();
   }
-
 
   getPositionFen() {
     return game.fen;
@@ -217,5 +217,91 @@ class GameProvider extends ChangeNotifier {
   void setCurrentPlayerId({required int playerId}) {
     _currentPlayerId = playerId;
     notifyListeners();
+  }
+
+  // ----------------Game With Friend ---------------- //
+  String _gameId = '';
+  String _opponentUsername = '';
+
+  // Multiplayer game data
+  GameModel? _gameModel;
+
+  // Existing getters...
+  GameModel? get gameModel => _gameModel;
+  String get gameId => _gameId;
+  String get opponentUsername => _opponentUsername;
+
+  void setOpponentUsername({required String username}) {
+    _opponentUsername = username;
+    notifyListeners();
+  }
+
+  // Method to initialize a multiplayer game
+  void initializeMultiplayerGame(Map<String, dynamic> gameData) {
+    // Parse game data into GameModel
+    _gameModel = GameModel.fromJson(gameData);
+    _gameId = _gameModel!.gameId;
+
+    // Determine player color based on game data
+    _player = _gameModel!.isWhitesTurn ? Squares.white : Squares.black;
+    _playerColor =
+        _player == Squares.white ? PlayerColor.white : PlayerColor.black;
+
+    // Initialize game with FEN position
+    _game = bishop.Game(
+        variant: bishop.Variant.standard(),
+        fen: _gameModel!.positonFen // Use the FEN from the game model
+        );
+    _state = _game.squaresState(_player);
+
+    // Set game mode
+    _computerMode = false;
+    _friendsMode = true;
+
+    // Set player IDs
+    _whitePlayerId = int.tryParse(_gameModel!.gameCreatorUid) ?? -1;
+    _blackPlayerId = int.tryParse(_gameModel!.userId) ?? -1;
+    _currentPlayerId =
+        _gameModel!.isWhitesTurn ? _whitePlayerId : _blackPlayerId;
+
+    // Set game time if available
+    _gameTime = int.tryParse(_gameModel!.whitesTime) ?? 0;
+
+    // Set game end status
+    _isGameEnd = _gameModel!.isGameOver;
+
+    notifyListeners();
+  }
+
+  // Method to update game state from move
+  void updateGameState(String fen, bool isWhitesTurn) {
+    _game = bishop.Game(variant: bishop.Variant.standard(), fen: fen);
+    _state = _game.squaresState(_player);
+    _player = isWhitesTurn ? Squares.white : Squares.black;
+    _playerColor =
+        _player == Squares.white ? PlayerColor.white : PlayerColor.black;
+
+    notifyListeners();
+  }
+
+  void synchronizeMove(String move) {
+    try {
+      // Attempt to make the move
+      bool result = _game.makeMoveString(move);
+
+      if (result) {
+        _state = _game.squaresState(_player);
+        _isGameEnd = _game.gameOver;
+
+        // Switch player
+        _player = _player == Squares.white ? Squares.black : Squares.white;
+        _playerColor =
+            _player == Squares.white ? PlayerColor.white : PlayerColor.black;
+
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error synchronizing move: $e');
+    }
   }
 }

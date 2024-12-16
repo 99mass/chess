@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:chess/constant/constants.dart';
+import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/provider/time_provider.dart';
+import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/stockfish_uic_command.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +21,8 @@ class GameBoardScreen extends StatefulWidget {
 }
 
 class _GameBoardScreenState extends State<GameBoardScreen> {
-  late Stockfish stockfish;
+  late WebSocketService _webSocketService;
+  late Stockfish? stockfish;
   late GameProvider gameProvider;
   late ChessTimer _chessTimer;
   StreamSubscription<String>? _stockfishSubscription;
@@ -26,9 +31,14 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   @override
   void initState() {
     super.initState();
-    stockfish = StockfishInstance.instance;
 
+    _webSocketService = WebSocketService();
+    _webSocketService.connectWebSocket(context);
     gameProvider = context.read<GameProvider>();
+
+    // Initialize stockfish only for computer mode
+    stockfish = gameProvider.computerMode ? StockfishInstance.instance : null;
+
     gameProvider.resetGame(newGame: false);
 
     _chessTimer = ChessTimer(
@@ -47,15 +57,19 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       playerColor: gameProvider.playerColor,
     );
 
-    // Assurez-vous que le jeu est prêt avant de laisser l'IA jouer
+    // Handle first move based on game mode
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      letOtherPlayerPlayFirst();
+      if (gameProvider.computerMode) {
+        letOtherPlayerPlayFirst();
+      }
     });
   }
 
   Future<void> waitUntilReady({int timeoutSeconds = 10}) async {
+    if (stockfish == null) return;
+
     int elapsed = 0;
-    while (stockfish.state.value != StockfishState.ready) {
+    while (stockfish!.state.value != StockfishState.ready) {
       if (elapsed >= timeoutSeconds) {
         debugPrint('Timeout: Stockfish n\'est pas prêt.');
         return;
@@ -71,26 +85,35 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     Future<bool> result = gameProvider.makeSquaresMove(move, context: context);
     if (await result) {
       _chessTimer.switchTurn();
-      gameProvider.setSquareState().whenComplete(() {
-        if (gameProvider.state.state == PlayState.theirTurn &&
-            !gameProvider.aiThinking) {
-          _triggerAiMove();
-        }
-      });
+
+      // Determine next action based on game mode
+      if (gameProvider.computerMode) {
+        gameProvider.setSquareState().whenComplete(() {
+          if (gameProvider.state.state == PlayState.theirTurn &&
+              !gameProvider.aiThinking) {
+            _triggerAiMove();
+          }
+        });
+      } else if (gameProvider.friendsMode) {
+        // TODO: Implement WebSocket move synchronization for multiplayer
+      }
     }
   }
 
   void letOtherPlayerPlayFirst() async {
-    if (gameProvider.state.state == PlayState.theirTurn &&
+    if (gameProvider.computerMode &&
+        gameProvider.state.state == PlayState.theirTurn &&
         !gameProvider.aiThinking) {
       _triggerAiMove();
     }
   }
 
   void _triggerAiMove() async {
+    if (stockfish == null) return;
+
     await waitUntilReady();
 
-    if (stockfish.state.value != StockfishState.ready) {
+    if (stockfish!.state.value != StockfishState.ready) {
       debugPrint('Stockfish n\'est pas prêt à exécuter des commandes.');
       return;
     }
@@ -104,15 +127,15 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     };
 
     // Envoyer les commandes à Stockfish
-    stockfish.stdin =
+    stockfish!.stdin =
         '${StockfishUicCommand.position} ${gameProvider.getPositionFen()}';
-    stockfish.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 1000}';
+    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 1000}';
 
     // Désabonner les anciens écouteurs s'il y en a
     _stockfishSubscription?.cancel();
 
     // Écouter les réponses de Stockfish
-    _stockfishSubscription = stockfish.stdout.listen((event) {
+    _stockfishSubscription = stockfish!.stdout.listen((event) {
       if (event.contains(StockfishUicCommand.bestMove)) {
         final bestMove = event.split(' ')[1];
 
@@ -147,11 +170,39 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         );
 
         if (confirmExit == true) {
+          if (gameProvider.friendsMode) {
+            
+            final roomLeave = InvitationMessage(
+              type: 'room_leave',
+              fromUserId: gameProvider.user.id,
+              fromUsername: gameProvider.user.userName,
+              toUserId: gameProvider.gameModel!.userId,
+              toUsername: gameProvider.opponentUsername,
+              timestamp: DateTime.now().millisecondsSinceEpoch,
+              roomId: gameProvider.gameModel!.gameId,
+            );
+
+            final roomLeaveJson = json.encode({
+              'type': 'room_leave',
+              'content': json.encode(roomLeave.toJson())
+            });
+            print('roomLeaveJson: $roomLeaveJson');
+
+            _webSocketService.sendMessage(roomLeaveJson);
+             Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const MainMenuScreen(),
+            ),
+          );
+          }
           // Libération des ressources
           _timer?.cancel();
           _chessTimer.dispose();
           _chessTimer.stop();
-          stockfish.stdin = StockfishUicCommand.stop;
+          if (stockfish != null) {
+            stockfish!.stdin = StockfishUicCommand.stop;
+          }
           _stockfishSubscription?.cancel();
           return true; // Autorise la sortie
         }
@@ -168,9 +219,13 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
           return Scaffold(
               backgroundColor: Colors.black54,
               appBar: AppBar(
-                title: const Text(
-                  'Chess Game',
-                  style: TextStyle(
+                title: Text(
+                  gameProvider.computerMode
+                      ? 'Computer Game'
+                      : gameProvider.friendsMode
+                          ? 'Multiplayer Game'
+                          : 'Chess Game',
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
@@ -183,7 +238,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                       _chessTimer.reset();
                       gameProvider.resetGame(newGame: false);
                       if (mounted) {
-                        letOtherPlayerPlayFirst();
+                        if (gameProvider.computerMode) {
+                          letOtherPlayerPlayFirst();
+                        }
                       }
                     },
                     icon: const Icon(
@@ -203,16 +260,17 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
                     isUser: false);
+
                 return Center(
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // User 2
+                        // User 2 (Top Player)
                         SizedBox(
                           width: boardSize,
                           child: _buildUserTile(
-                            email: 'master@chess.com',
+                            email: _getPlayerName(isWhite: false),
                             avatarUrl: 'avatar.png',
                             isTurn: !_chessTimer.isWhiteTurn,
                             tileColor: Colors.white,
@@ -248,11 +306,11 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                             ),
                           ),
                         ),
-                        // User 1
+                        // User 1 (Bottom Player)
                         SizedBox(
                           width: boardSize,
                           child: _buildUserTile(
-                            email: 'breukh@chess.com',
+                            email: _getPlayerName(isWhite: true),
                             avatarUrl: 'avatar.png',
                             isTurn: _chessTimer.isWhiteTurn,
                             tileColor: Colors.white,
@@ -268,6 +326,21 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         },
       ),
     );
+  }
+
+  String _getPlayerName({required bool isWhite}) {
+    if (gameProvider.computerMode) {
+      return isWhite ? 'You' : 'Computer';
+    } else if (gameProvider.friendsMode && gameProvider.gameModel != null) {
+      return isWhite
+          ? (gameProvider.playerColor == PlayerColor.white
+              ? gameProvider.user.userName
+              : gameProvider.gameModel!.opponentUsername)
+          : (gameProvider.playerColor == PlayerColor.white
+              ? gameProvider.gameModel!.opponentUsername
+              : gameProvider.user.userName);
+    }
+    return isWhite ? 'Player 1' : 'Player 2';
   }
 
   Widget _buildUserTile(
@@ -328,6 +401,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     );
   }
 
+  // ignore: non_constant_identifier_names
   Widget _ConfirmExitDialog() {
     return AlertDialog(
       title: const Text('Exit Game'),
@@ -354,7 +428,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     _chessTimer.stop();
     _chessTimer.dispose();
     _timer?.cancel();
-    stockfish.stdin = StockfishUicCommand.stop;
+    if (stockfish != null) {
+      stockfish!.stdin = StockfishUicCommand.stop;
+    }
     _stockfishSubscription?.cancel();
     super.dispose();
   }
