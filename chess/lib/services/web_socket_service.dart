@@ -103,10 +103,19 @@ class WebSocketService {
         case 'game_start':
           if (context != null) {
             final gameData = json.decode(data['content']);
-            Provider.of<GameProvider>(context, listen: false)
-                .initializeMultiplayerGame(gameData);
-            print('Game data: $gameData');
-            _navigateToGameBoard(context);
+            print('Received Game Start Data: $gameData');
+
+            try {
+              Provider.of<GameProvider>(context, listen: false)
+                  .initializeMultiplayerGame(gameData);
+              _navigateToGameBoard(context);
+
+            } catch (e) {
+              print('Error initializing game: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to start game try ')),
+              );
+            }
           }
           break;
 
@@ -250,32 +259,35 @@ class WebSocketService {
 
   void _showInvitationDialog(BuildContext context, UserProfile currentUser,
       InvitationMessage invitation) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Game Invitation'),
-          content: Text('${invitation.fromUsername} invites you to play chess'),
-          actions: [
-            TextButton(
-              child: const Text('Accept'),
-              onPressed: () {
-                acceptInvitation(currentUser, invitation);
-                Navigator.of(dialogContext).pop(true);
-              },
-            ),
-            TextButton(
-              child: const Text('Reject'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                rejectInvitation(currentUser, invitation);
-              },
-            ),
-          ],
-        );
-      },
-    );
+    if (ModalRoute.of(context)?.isCurrent ?? false) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Game Invitation'),
+            content:
+                Text('${invitation.fromUsername} invites you to play chess'),
+            actions: [
+              TextButton(
+                child: const Text('Accept'),
+                onPressed: () {
+                  acceptInvitation(currentUser, invitation);
+                  Navigator.of(dialogContext).pop(true);
+                },
+              ),
+              TextButton(
+                child: const Text('Reject'),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  rejectInvitation(currentUser, invitation);
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 
   void _handleInvitationAccepted(

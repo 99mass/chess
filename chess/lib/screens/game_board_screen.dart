@@ -171,7 +171,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
         if (confirmExit == true) {
           if (gameProvider.friendsMode) {
-            
             final roomLeave = InvitationMessage(
               type: 'room_leave',
               fromUserId: gameProvider.user.id,
@@ -189,12 +188,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
             print('roomLeaveJson: $roomLeaveJson');
 
             _webSocketService.sendMessage(roomLeaveJson);
-             Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MainMenuScreen(),
-            ),
-          );
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MainMenuScreen(),
+              ),
+            );
           }
           // Libération des ressources
           _timer?.cancel();
@@ -335,9 +334,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       return isWhite
           ? (gameProvider.playerColor == PlayerColor.white
               ? gameProvider.user.userName
-              : gameProvider.gameModel!.opponentUsername)
+              : gameProvider.opponentUsername)
           : (gameProvider.playerColor == PlayerColor.white
-              ? gameProvider.gameModel!.opponentUsername
+              ? gameProvider.opponentUsername
               : gameProvider.user.userName);
     }
     return isWhite ? 'Player 1' : 'Player 2';

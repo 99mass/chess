@@ -27,7 +27,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
     // Initialize WebSocket connection
     _webSocketService = WebSocketService();
     _webSocketService.connectWebSocket(context).then((_) {
-      // Une fois la connexion établie, demander explicitement la liste des utilisateurs
+
       _webSocketService
           .sendMessage(json.encode({'type': 'request_online_users'}));
     });
@@ -83,12 +83,6 @@ class _FriendListScreenState extends State<FriendListScreen> {
               }
             }
           }
-          print('Online users: ${onlineUsers.length}');
-          // final onlineUsers = snapshot.data!
-          //     .where((user) =>
-          //         gameProvider.user.id != user.id &&
-          //         !user.isInRoom )
-          //     .toList();
 
           if (onlineUsers.isEmpty) {
             return const Center(
