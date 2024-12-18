@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:squares/squares.dart';
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_board_screen.dart';
-import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/api_link.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:flutter/material.dart';
@@ -74,12 +74,16 @@ class WebSocketService {
     }
   }
 
-  void _handleMessage(
+  Future<void> _handleMessage(
     dynamic message,
     BuildContext? context,
-  ) {
+  ) async {
     try {
+      print('🌐 Raw WebSocket Message Received: $message');
+
       final Map<String, dynamic> data = json.decode(message);
+      print('📬 Message Type: ${data['type']}');
+      print('📦 Message Content: ${data['content']}');
 
       switch (data['type']) {
         case 'online_users':
@@ -88,70 +92,110 @@ class WebSocketService {
                   .map((userJson) => UserProfile.fromJson(userJson))
                   .toList();
 
-          print('Nombre d\'utilisateurs reçus : ${onlineUsers.length}');
-          print(
-              'Utilisateurs : ${onlineUsers.map((u) => u.userName).toList()} | isInRoom: ${onlineUsers.map((u) => u.isInRoom).toList()}');
-
-          final uniqueUsers = onlineUsers.toSet().toList();
-          _onlineUsersController.add(uniqueUsers);
+          if (context != null) {
+            Provider.of<GameProvider>(context, listen: false)
+                .updateOnlineUsers(onlineUsers);
+          }
           break;
+
         case 'invitation':
           final invitation =
               InvitationMessage.fromJson(json.decode(data['content']));
-          _invitationController.add(invitation);
+
+          if (context != null) {
+            final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+            gameProvider.addInvitation(invitation);
+          }
+          break;
+
+        case 'invitation_rejected':
+          final invitation =
+              InvitationMessage.fromJson(json.decode(data['content']));
+
+          if (context != null) {
+            final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+            gameProvider.handleInvitationRejection(context, invitation);
+          }
+          break;
+
+        case 'invitation_cancel':
+          final invitation =
+              InvitationMessage.fromJson(json.decode(data['content']));
+
+          if (context != null) {
+            final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+            gameProvider.handleInvitationCancellation(context, invitation);
+          }
           break;
         case 'game_start':
-          if (context != null) {
+          if (context != null && context.mounted) {
             final gameData = json.decode(data['content']);
             print('Received Game Start Data: $gameData');
 
             try {
               Provider.of<GameProvider>(context, listen: false)
                   .initializeMultiplayerGame(gameData);
-              _navigateToGameBoard(context);
 
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const GameBoardScreen(),
+                ),
+              );
             } catch (e) {
               print('Error initializing game: $e');
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to start game try ')),
+                const SnackBar(content: Text('Failed to start game try again')),
               );
             }
-          }
-          break;
-
-        case 'invitation_rejected':
-          if (context != null) {
-            final invitation =
-                InvitationMessage.fromJson(json.decode(data['content']));
-            _handleInvitationRejection(context, invitation);
-          }
-          break;
-        case 'invitation_cancel':
-          if (context != null) {
-            final invitation =
-                InvitationMessage.fromJson(json.decode(data['content']));
-            _handleInvitationCancel(context, invitation);
           }
           break;
         case 'room_closed':
           if (context != null) {
             final Map<String, dynamic> roomData = json.decode(data['content']);
             final fromUsername = roomData['fromUsername'];
-            print('fromUsername: $fromUsername');
 
-            // Show notification and redirect
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('$fromUsername has left the game.'),
-            ));
-            Timer(const Duration(seconds: 3), () {
-              // Redirect to MainMenuScreen
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const MainMenuScreen(),
-                ),
-              );
-            });
+            // Get the game provider
+            final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+
+            if (!gameProvider.exitGame) {
+              gameProvider.setExitGame(value: true);
+
+              Future.microtask(() {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('$fromUsername has left the game.'),
+                  ));
+                }
+              });
+            }
+          }
+          break;
+        // -------------Game Move
+
+        case 'game_move':
+          if (context != null) {
+            final gameData = json.decode(data['content']);
+            print('Received Game Move: $gameData');
+
+            try {
+              final gameProvider =
+                  Provider.of<GameProvider>(context, listen: false);
+
+              // Extract move and game state information
+              String moveString = gameData['move'];
+              String newFen = gameData['positionFen'] ?? '';
+              bool isWhitesTurn = gameData['isWhitesTurn'] ?? true;
+
+              // Synchronize move in game provider
+              gameProvider.synchronizeMove(moveString);
+              gameProvider.updateGameState(newFen, isWhitesTurn);
+            } catch (e) {
+              print('Error processing game move: $e');
+            }
           }
           break;
 
@@ -159,14 +203,17 @@ class WebSocketService {
           print('Unhandled message type: ${data['type']}');
       }
     } catch (e) {
-      print('Error handling WebSocket message: $e');
+      print('❌ Error in Message Handling: $e');
     }
   }
 
   void sendGameInvitation(BuildContext context,
       {required UserProfile currentUser, required UserProfile toUser}) {
+ 
     if (!_isConnected) {
-      print('WebSocket not connected');
+      print('❌ WebSocket Disconnected');
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network Error. Please reconnect.')));
       return;
     }
 
@@ -185,6 +232,7 @@ class WebSocketService {
     });
 
     sendMessage(invitationJson);
+    print('✅ Invitation Sent Successfully');
   }
 
   void acceptInvitation(UserProfile currentUser, InvitationMessage invitation) {
@@ -300,44 +348,20 @@ class WebSocketService {
     );
   }
 
-  void _navigateToGameBoard(
-    BuildContext context,
-  ) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const GameBoardScreen(),
-      ),
-    );
-  }
+  void leaveRoom(UserProfile currentUser) {
+    if (!_isConnected) {
+      print('WebSocket not connected');
+      return;
+    }
 
-  void _handleInvitationRejection(
-      BuildContext context, InvitationMessage invitation) {
-    // Fermer l'écran d'attente et afficher un message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${invitation.fromUsername} rejected your invitation'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
-    Timer(const Duration(seconds: 5), () {});
-    Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
-        ));
-  }
+    final leaveMessage = {
+      'type': 'room_leave',
+      'content': json.encode({
+        'username': currentUser.userName,
+      }),
+    };
 
-  void _handleInvitationCancel(
-      BuildContext context, InvitationMessage invitation) {
-    // Fermer l'écran d'attente et afficher un message
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${invitation.toUsername} canceled the invitation'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
+    sendMessage(json.encode(leaveMessage));
   }
 
   void _onConnectionClosed(BuildContext? context) {
@@ -383,6 +407,35 @@ class WebSocketService {
     if (_channel != null && _isConnected) {
       _channel!.sink.add(message);
     }
+  }
+
+// ---------Game Move------------
+  final List<Function(String)> _messageListeners = [];
+
+  void addMessageListener(Function(String) listener) {
+    _messageListeners.add(listener);
+  }
+
+  void removeMessageListener(Function(String) listener) {
+    _messageListeners.remove(listener);
+  }
+
+// Add this method to your WebSocket service
+  void sendGameMove(GameProvider gameProvider, Move move) {
+    // Convert squares Move to string move
+    String moveString = '${move.from}${move.to}';
+
+    final moveMessage = {
+      'type': 'game_move',
+      'content': json.encode({
+        'gameId': gameProvider.gameId,
+        'move': moveString,
+        'positionFen': gameProvider.gameModel?.positonFen ?? '',
+        'isWhitesTurn': !(gameProvider.gameModel?.isWhitesTurn ?? true),
+      }),
+    };
+
+    sendMessage(json.encode(moveMessage));
   }
 
   void disposeInvitationStream() {

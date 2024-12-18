@@ -6,6 +6,7 @@ import 'package:bishop/bishop.dart' as bishop;
 import 'package:chess/constant/constants.dart';
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/game_model.dart';
+import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/helper.dart';
@@ -222,14 +223,25 @@ class GameProvider extends ChangeNotifier {
   // ----------------Game With Friend ---------------- //
   String _gameId = '';
   String _opponentUsername = '';
+  bool _exitGame = false;
 
   // Multiplayer game data
   GameModel? _gameModel;
+  bool _isFlipBoard = false;
 
   // Existing getters...
   GameModel? get gameModel => _gameModel;
   String get gameId => _gameId;
   String get opponentUsername => _opponentUsername;
+  bool get isFlipBoard => _isFlipBoard;
+  bool get exitGame => _exitGame;
+
+  void setExitGame({required bool value}) {
+    _exitGame = value;
+    Future.microtask(() {
+      notifyListeners();
+    });
+  }
 
   void setOpponentUsername({required String username}) {
     _opponentUsername = username;
@@ -242,16 +254,26 @@ class GameProvider extends ChangeNotifier {
     _gameModel = GameModel.fromJson(gameData);
     _gameId = _gameModel!.gameId;
 
-    // Determine player color based on game data
-    _player = _gameModel!.isWhitesTurn ? Squares.white : Squares.black;
-    _playerColor =
-        _player == Squares.white ? PlayerColor.white : PlayerColor.black;
+    // Determine player's perspective and board orientation
+    bool isPlayerWhite = _userProfile.id == _gameModel!.gameCreatorUid;
+
+    // Set player's color and board orientation
+    _player = isPlayerWhite ? Squares.white : Squares.black;
+    _playerColor = isPlayerWhite ? PlayerColor.white : PlayerColor.black;
+
+    // Flip the board if the player is playing black
+    _flipBoard = !isPlayerWhite;
+    _isFlipBoard = _flipBoard;
+
+    print('flipBoard: $_flipBoard');
+    print('isWhitesTurn: ${gameModel!.isWhitesTurn}');
+    print('isPlayerWhite: $isPlayerWhite');
 
     // Initialize game with FEN position
     _game = bishop.Game(
-        variant: bishop.Variant.standard(),
-        fen: _gameModel!.positonFen // Use the FEN from the game model
-        );
+        variant: bishop.Variant.standard(), fen: _gameModel!.positonFen);
+
+    // Adjust the game state based on player's perspective
     _state = _game.squaresState(_player);
 
     // Set game mode
@@ -261,8 +283,11 @@ class GameProvider extends ChangeNotifier {
     // Set player IDs
     _whitePlayerId = int.tryParse(_gameModel!.gameCreatorUid) ?? -1;
     _blackPlayerId = int.tryParse(_gameModel!.userId) ?? -1;
-    _currentPlayerId =
-        _gameModel!.isWhitesTurn ? _whitePlayerId : _blackPlayerId;
+
+    // Determine current player based on turn and player's perspective
+    _currentPlayerId = _gameModel!.isWhitesTurn
+        ? (isPlayerWhite ? _whitePlayerId : _blackPlayerId)
+        : (isPlayerWhite ? _blackPlayerId : _whitePlayerId);
 
     // Set game time if available
     _gameTime = int.tryParse(_gameModel!.whitesTime) ?? 0;
@@ -303,5 +328,146 @@ class GameProvider extends ChangeNotifier {
     } catch (e) {
       print('Error synchronizing move: $e');
     }
+  }
+
+  // ==========================================
+  // New additions for managing online users and invitations
+  List<UserProfile> _onlineUsers = [];
+  List<InvitationMessage> _invitations = [];
+  InvitationMessage? _currentInvitation;
+
+  // Streams for online users and invitations
+  final StreamController<List<UserProfile>> _onlineUsersController =
+      StreamController<List<UserProfile>>.broadcast();
+  final StreamController<List<InvitationMessage>> _invitationsController =
+      StreamController<List<InvitationMessage>>.broadcast();
+
+  // Getters for online users and invitations
+  List<UserProfile> get onlineUsers => _onlineUsers;
+  // List<InvitationMessage> get invitations => _invitations;
+
+  Stream<List<UserProfile>> get onlineUsersStream =>
+      _onlineUsersController.stream;
+  Stream<List<InvitationMessage>> get invitationsStream =>
+      _invitationsController.stream;
+  InvitationMessage? get currentInvitation => _currentInvitation;
+
+  // Method to update online users
+  void updateOnlineUsers(List<UserProfile> users) {
+    _onlineUsers = users.toSet().toList();
+    _onlineUsersController.add(_onlineUsers);
+    notifyListeners();
+  }
+
+  // Method to add a new invitation
+  void addInvitation(InvitationMessage invitation) {
+    // Prevent duplicate invitations
+    if (!_invitations.any((inv) =>
+        inv.fromUserId == invitation.fromUserId &&
+        inv.toUserId == invitation.toUserId)) {
+      _invitations.add(invitation);
+      _invitationsController.add(_invitations);
+      notifyListeners();
+    }
+  }
+
+  // Method to remove an invitation
+  void removeInvitation(InvitationMessage invitation) {
+    _invitations.removeWhere((inv) =>
+        inv.fromUserId == invitation.fromUserId &&
+        inv.toUserId == invitation.toUserId);
+    _invitationsController.add(_invitations);
+    notifyListeners();
+  }
+
+  // Method to clear all invitations
+  void clearInvitations() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _invitations.clear();
+      _invitationsController.add(_invitations);
+      notifyListeners();
+    });
+  }
+
+  void createInvitation({
+    required UserProfile toUser,
+    required UserProfile fromUser,
+  }) {
+    _currentInvitation = InvitationMessage(
+      type: 'invitation_send',
+      fromUserId: fromUser.id,
+      fromUsername: fromUser.userName,
+      toUserId: toUser.id,
+      toUsername: toUser.userName,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    // Mettre à jour le nom de l'opponent
+    setOpponentUsername(username: toUser.userName);
+
+    notifyListeners();
+  }
+
+    void clearCurrentInvitation() {
+    _currentInvitation = null;
+    notifyListeners();
+  }
+
+void updateCurrentInvitation(InvitationMessage invitation) {
+    _currentInvitation = invitation;
+    notifyListeners();
+  }
+
+
+  // Method to handle invitation rejection
+  void handleInvitationRejection(
+      BuildContext context, InvitationMessage invitation) {
+    removeInvitation(invitation);
+    // Additional logic for handling rejection can be added here
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${invitation.fromUsername} rejected your invitation'),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+    Timer(const Duration(seconds: 2), () {});
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainMenuScreen(),
+        ));
+  }
+
+  // Method to handle invitation cancellation
+  void handleInvitationCancellation(
+      BuildContext context, InvitationMessage invitation) {
+    removeInvitation(invitation);
+    // Additional logic for handling cancellation can be added here
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${invitation.toUsername} canceled the invitation'),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+    void handleInvitationAccepted(
+      BuildContext context, InvitationMessage invitation) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${invitation.fromUsername} accepted your invitation'),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+  
+
+  // Dispose method to close streams
+  @override
+  void dispose() {
+    _onlineUsersController.close();
+    _invitationsController.close();
+    super.dispose();
   }
 }

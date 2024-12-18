@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -163,6 +164,42 @@ func (room *ChessGameRoom) RemoveConnection(username string) {
 	defer room.mutex.Unlock()
 
 	delete(room.Connections, username)
+}
+
+func (m *OnlineUsersManager) RemoveUserFromRoom(username string) ([]OnlineUser, error) {
+	// Find the room the user is in
+	var roomToRemove *ChessGameRoom
+	m.roomManager.mutex.RLock()
+	for _, room := range m.roomManager.rooms {
+		if room.WhitePlayer.Username == username || room.BlackPlayer.Username == username {
+			roomToRemove = room
+			break
+		}
+	}
+	m.roomManager.mutex.RUnlock()
+
+	// If no room found, return an error
+	if roomToRemove == nil {
+		return nil, fmt.Errorf("user %s not in any room", username)
+	}
+
+	// Find the other player
+	otherUsername, found := roomToRemove.GetOtherPlayer(username)
+	if !found {
+		return nil, fmt.Errorf("could not find other player in room")
+	}
+
+	// Remove the room
+	m.roomManager.RemoveRoom(roomToRemove.RoomID)
+
+	// Update user statuses
+	m.userStore.UpdateUserRoomStatus(username, false)
+	if otherUsername != "" {
+		m.userStore.UpdateUserRoomStatus(otherUsername, false)
+	}
+
+	// Broadcast and return online users
+	return m.getCurrentOnlineUsers(), nil
 }
 
 // Broadcast message to all players in the room

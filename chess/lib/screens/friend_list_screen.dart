@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:chess/model/friend_model.dart';
-import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:flutter/material.dart';
@@ -16,8 +15,8 @@ class FriendListScreen extends StatefulWidget {
 }
 
 class _FriendListScreenState extends State<FriendListScreen> {
+  late GameProvider _gameProvider;
   late WebSocketService _webSocketService;
-  late Stream<List<UserProfile>> _onlineUsersStream;
   List<UserProfile> onlineUsers = [];
 
   @override
@@ -26,33 +25,40 @@ class _FriendListScreenState extends State<FriendListScreen> {
 
     // Initialize WebSocket connection
     _webSocketService = WebSocketService();
-    _webSocketService.connectWebSocket(context).then((_) {
 
+    _gameProvider = Provider.of<GameProvider>(context, listen: false);
+
+    // Connect WebSocket
+    _webSocketService.connectWebSocket(context).then((_) {
       _webSocketService
           .sendMessage(json.encode({'type': 'request_online_users'}));
     });
 
-    _onlineUsersStream = _webSocketService.onlineUsersStream;
+    // Listen to online users stream
+    _gameProvider.onlineUsersStream.listen((users) {
+      print('Utilisateurs en ligne : ${users.length}');
+    });
 
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-
-    // Listen to invitations
-    _webSocketService.invitationStream.listen((invitation) {
-      _webSocketService.handleInvitationInteraction(
-          context, gameProvider.user, invitation);
+    // Handle invitations
+    _gameProvider.invitationsStream.listen((invitations) {
+      if (invitations.isNotEmpty) {
+        final latestInvitation = invitations.last;
+        _webSocketService.handleInvitationInteraction(
+            context, _gameProvider.user, latestInvitation);
+      }
+    }, onError: (error) {
+      print('Erreur dans le flux d\'invitations : $error');
     });
   }
 
   @override
   void dispose() {
-    _webSocketService.disposeInvitationStream();
+    _gameProvider.clearInvitations();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final gameProvider = Provider.of<GameProvider>(context, listen: false);
-
     return Scaffold(
       backgroundColor: Colors.black87,
       appBar: AppBar(
@@ -60,13 +66,13 @@ class _FriendListScreenState extends State<FriendListScreen> {
         backgroundColor: Colors.amber[700],
       ),
       body: StreamBuilder<List<UserProfile>>(
-        stream: _onlineUsersStream,
+        stream: _gameProvider.onlineUsersStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+
           onlineUsers = [];
-          print('snapshot users: ${snapshot.data!.length}');
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(
               child: Text(
@@ -77,7 +83,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
           }
 
           for (var user in snapshot.data!) {
-            if (gameProvider.user.id != user.id) {
+            if (_gameProvider.user.id != user.id) {
               if (!user.isInRoom) {
                 onlineUsers.add(user);
               }
@@ -108,27 +114,20 @@ class _FriendListScreenState extends State<FriendListScreen> {
   Widget _buildFriendItem(BuildContext context, UserProfile user) {
     return GestureDetector(
       onTap: () {
-        final gameProvider = Provider.of<GameProvider>(context, listen: false);
-        // Envoyer l'invitation de jeu
+        _gameProvider.createInvitation(
+            toUser: user, fromUser: _gameProvider.user);
+
+        // Send game invitation
         _webSocketService.sendGameInvitation(context,
-            toUser: user, currentUser: gameProvider.user);
-        gameProvider.setOpponentUsername(username: user.userName);
+            toUser: user, currentUser: _gameProvider.user);
+        _gameProvider.setOpponentUsername(username: user.userName);
 
         // Navigate to waiting room
         Navigator.of(context).pop(true);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => WaitingRoomScreen(
-              invitation: InvitationMessage(
-                type: 'invitation_send',
-                fromUserId: gameProvider.user.id,
-                fromUsername: gameProvider.user.userName,
-                toUserId: user.id,
-                toUsername: user.userName,
-                timestamp: DateTime.now().millisecondsSinceEpoch,
-              ),
-            ),
+            builder: (context) => const WaitingRoomScreen(),
           ),
         );
       },

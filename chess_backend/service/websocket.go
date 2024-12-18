@@ -61,6 +61,7 @@ func (m *OnlineUsersManager) HandleConnection(w http.ResponseWriter, r *http.Req
 
 	// Gestion de la connexion
 	go m.handleClientConnection(username, conn)
+
 }
 
 // Gérer les messages du client
@@ -106,18 +107,45 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 			if err := m.handleInvitation(invitation); err != nil {
 				log.Printf("Failed to process invitation: %v", err)
 			}
+			m.broadcastOnlineUsers()
+		case "leave_room":
+			var leaveRequest struct {
+				Username string `json:"username"`
+			}
+			if err := json.Unmarshal([]byte(message.Content), &leaveRequest); err != nil {
+				log.Printf("Error parsing leave room request: %v", err)
+				continue
+			}
+
+			_, err := m.RemoveUserFromRoom(leaveRequest.Username)
+			if err != nil {
+				log.Printf("Error removing user from room: %v", err)
+				continue
+			}
+
+			// Notify all clients about updated online users
+			m.broadcastOnlineUsers()
 
 		default:
 			log.Printf("Unhandled message type: %s", message.Type)
+			m.broadcastOnlineUsers()
 		}
 	}
 }
 
 func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) error {
+	log.Printf("🚀 Handling Invitation")
+    log.Printf("   From: %s", invitation.FromUsername)
+    log.Printf("   To: %s", invitation.ToUsername)
+
 	m.mutex.RLock()
-	fromConn, fromExists := m.connections[invitation.FromUsername]
+	_, fromExists := m.connections[invitation.FromUsername]
 	toConn, toExists := m.connections[invitation.ToUsername]
 	m.mutex.RUnlock()
+
+	log.Printf("🔌 Connection Status:")
+    log.Printf("   From User Connected: %v", fromExists)
+    log.Printf("   To User Connected: %v", toExists)
 
 	if invitation.Type == RoomLeave && !fromExists {
 		log.Printf("Cannot process room leave: user %s not online", invitation.FromUsername)
@@ -130,40 +158,32 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 	}
 
 	switch invitation.Type {
-
 	case InvitationSend:
-		// Générer un ID de room si non fourni
+
+		// Envoyer l'invitation au destinataire
+		toConn, exists := m.connections[invitation.ToUsername]
+		if exists {
+			err := toConn.WriteJSON(WebSocketMessage{
+				Type:    "invitation",
+				Content: string(mustJson(invitation)),
+			})
+			if err != nil {
+				log.Printf("❌ Error Sending Invitation: %v", err)
+				return err
+			}
+			log.Printf("✅ Invitation Sent Successfully to %s", invitation.ToUsername)
+		} else {
+			log.Printf("❌ Recipient %s not connected", invitation.ToUsername)
+		}
+
+	case InvitationAccept:
+
+		// Générer un ID de room
 		if invitation.RoomID == "" {
 			invitation.RoomID = GenerateUniqueID()
 		}
 
-		// Mettre à jour le statut de la room pour l'expéditeur (en attente)
-		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, true)
-		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, true)
-
-		// Créer la room
 		m.roomManager.CreateRoom(invitation)
-
-		// Envoyer l'invitation au destinataire
-		err := toConn.WriteJSON(WebSocketMessage{
-			Type:    "invitation",
-			Content: string(mustJson(invitation)),
-		})
-		if err != nil {
-			log.Printf("Error sending invitation: %v", err)
-			return err
-		}
-
-		// Optionnel : Notifier l'expéditeur que l'invitation a été envoyée
-		err = fromConn.WriteJSON(WebSocketMessage{
-			Type:    "invitation_sent",
-			Content: string(mustJson(invitation)),
-		})
-		if err != nil {
-			log.Printf("Error confirming invitation sent: %v", err)
-		}
-
-	case InvitationAccept:
 
 		// Retrouver la room
 		room, exists := m.roomManager.GetRoom(invitation.RoomID)
@@ -235,12 +255,6 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 
 		log.Printf("Connection status - From: %v, To: %v", fromExists, toExists)
 
-		m.roomManager.RemoveRoom(invitation.RoomID)
-
-		// Mettre à jour le statut des joueurs
-		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
-		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
-
 		// Notifier l'expéditeur du rejet (celui qui a reçu l'invitation)
 		if fromExists {
 			err := fromConn.WriteJSON(WebSocketMessage{
@@ -255,12 +269,6 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 
 	case InvitationCancel:
-
-		m.roomManager.RemoveRoom(invitation.RoomID)
-
-		// Mettre à jour le statut des joueurs
-		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
-		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
 
 		// Notifier le destinataire de l'annulation
 		err := toConn.WriteJSON(WebSocketMessage{
@@ -292,7 +300,9 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		if found {
 			m.userStore.UpdateUserRoomStatus(otherUsername, false)
 		}
-
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
+		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
+		
 	}
 
 	return nil

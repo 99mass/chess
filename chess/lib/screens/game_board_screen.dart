@@ -27,6 +27,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   late ChessTimer _chessTimer;
   StreamSubscription<String>? _stockfishSubscription;
   Timer? _timer;
+  bool isFlipBoard = false;
 
   @override
   void initState() {
@@ -38,7 +39,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
     // Initialize stockfish only for computer mode
     stockfish = gameProvider.computerMode ? StockfishInstance.instance : null;
-
     gameProvider.resetGame(newGame: false);
 
     _chessTimer = ChessTimer(
@@ -63,6 +63,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         letOtherPlayerPlayFirst();
       }
     });
+    isFlipBoard = gameProvider.flipBoard;
   }
 
   Future<void> waitUntilReady({int timeoutSeconds = 10}) async {
@@ -95,7 +96,21 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
           }
         });
       } else if (gameProvider.friendsMode) {
-        // TODO: Implement WebSocket move synchronization for multiplayer
+        // First, attempt to make the move locally
+        Future<bool> result =
+            gameProvider.makeSquaresMove(move, context: context);
+
+        if (await result) {
+          _chessTimer.switchTurn();
+
+          // Send move via WebSocket
+          _webSocketService.sendGameMove(gameProvider, move);
+
+          // Update game state
+          gameProvider.setSquareState().whenComplete(() {
+            // Additional state management if needed
+          });
+        }
       }
     }
   }
@@ -159,7 +174,28 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       _chessTimer.stop();
       _chessTimer.dispose();
     }
+    if (gameProvider.exitGame) {
+      _chessTimer.stop();
+      _chessTimer.dispose();
+      _timer?.cancel();
+      if (stockfish != null) {
+        stockfish!.stdin = StockfishUicCommand.stop;
+      }
 
+      _webSocketService.disposeInvitationStream();
+      _stockfishSubscription?.cancel();
+      gameProvider.resetGame(newGame: true);
+      
+      Timer(const Duration(seconds: 1), () {});
+      Future.microtask(() => Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainMenuScreen(),
+        ),
+      ));
+    }
+
+    // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
         bool? confirmExit = await showDialog<bool>(
@@ -170,43 +206,20 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         );
 
         if (confirmExit == true) {
-          if (gameProvider.friendsMode) {
-            final roomLeave = InvitationMessage(
-              type: 'room_leave',
-              fromUserId: gameProvider.user.id,
-              fromUsername: gameProvider.user.userName,
-              toUserId: gameProvider.gameModel!.userId,
-              toUsername: gameProvider.opponentUsername,
-              timestamp: DateTime.now().millisecondsSinceEpoch,
-              roomId: gameProvider.gameModel!.gameId,
-            );
+          _cleanup();
 
-            final roomLeaveJson = json.encode({
-              'type': 'room_leave',
-              'content': json.encode(roomLeave.toJson())
-            });
-            print('roomLeaveJson: $roomLeaveJson');
+          Timer(const Duration(seconds: 2), () {});
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const MainMenuScreen(),
+            ),
+          );
 
-            _webSocketService.sendMessage(roomLeaveJson);
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const MainMenuScreen(),
-              ),
-            );
-          }
-          // Libération des ressources
-          _timer?.cancel();
-          _chessTimer.dispose();
-          _chessTimer.stop();
-          if (stockfish != null) {
-            stockfish!.stdin = StockfishUicCommand.stop;
-          }
-          _stockfishSubscription?.cancel();
-          return true; // Autorise la sortie
+          return true;
         }
 
-        return false; // Bloque la sortie
+        return false;
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -259,6 +272,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
                     isUser: false);
+                print('creator 2: ${gameProvider.flipBoard}');
 
                 return Center(
                   child: SingleChildScrollView(
@@ -283,27 +297,49 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                             horizontal: 8.0,
                             vertical: 12.0,
                           ),
-                          child: SizedBox(
-                            width: boardSize,
-                            height: boardSize,
-                            child: BoardController(
-                              state: gameProvider.flipBoard
-                                  ? gameProvider.state.board.flipped()
-                                  : gameProvider.state.board,
-                              playState: gameProvider.state.state,
-                              pieceSet: PieceSet.merida(),
-                              theme: BoardTheme.blueGrey,
-                              moves: gameProvider.state.moves,
-                              onMove: _onMove,
-                              onPremove: _onMove,
-                              markerTheme: MarkerTheme(
-                                empty: MarkerTheme.dot,
-                                piece: MarkerTheme.corners(),
-                              ),
-                              promotionBehaviour:
-                                  PromotionBehaviour.autoPremove,
-                            ),
-                          ),
+                          child: gameProvider.computerMode
+                              ? SizedBox(
+                                  width: boardSize,
+                                  height: boardSize,
+                                  child: BoardController(
+                                    state: gameProvider.flipBoard
+                                        ? gameProvider.state.board.flipped()
+                                        : gameProvider.state.board,
+                                    playState: gameProvider.state.state,
+                                    pieceSet: PieceSet.merida(),
+                                    theme: BoardTheme.blueGrey,
+                                    moves: gameProvider.state.moves,
+                                    onMove: _onMove,
+                                    onPremove: _onMove,
+                                    markerTheme: MarkerTheme(
+                                      empty: MarkerTheme.dot,
+                                      piece: MarkerTheme.corners(),
+                                    ),
+                                    promotionBehaviour:
+                                        PromotionBehaviour.autoPremove,
+                                  ),
+                                )
+                              : SizedBox(
+                                  width: boardSize,
+                                  height: boardSize,
+                                  child: BoardController(
+                                    state: isFlipBoard
+                                        ? gameProvider.state.board.flipped()
+                                        : gameProvider.state.board,
+                                    playState: gameProvider.state.state,
+                                    pieceSet: PieceSet.merida(),
+                                    theme: BoardTheme.blueGrey,
+                                    moves: gameProvider.state.moves,
+                                    onMove: _onMove,
+                                    onPremove: _onMove,
+                                    markerTheme: MarkerTheme(
+                                      empty: MarkerTheme.dot,
+                                      piece: MarkerTheme.corners(),
+                                    ),
+                                    promotionBehaviour:
+                                        PromotionBehaviour.autoPremove,
+                                  ),
+                                ),
                         ),
                         // User 1 (Bottom Player)
                         SizedBox(
@@ -325,6 +361,47 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         },
       ),
     );
+  }
+
+  void _cleanup() {
+    // Stop and dispose of the chess timer
+    _chessTimer.stop();
+    _chessTimer.dispose();
+
+    // Cancel any running timers
+    _timer?.cancel();
+
+    // Stop Stockfish if it's running
+    if (stockfish != null) {
+      stockfish!.stdin = StockfishUicCommand.stop;
+    }
+
+    // Cancel Stockfish subscription
+    _stockfishSubscription?.cancel();
+
+    // Handle WebSocket room leaving for multiplayer mode
+    if (gameProvider.friendsMode) {
+      final roomLeave = InvitationMessage(
+        type: 'room_leave',
+        fromUserId: gameProvider.user.id,
+        fromUsername: gameProvider.user.userName,
+        toUserId: gameProvider.gameModel!.userId,
+        toUsername: gameProvider.opponentUsername,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        roomId: gameProvider.gameModel!.gameId,
+      );
+
+      final roomLeaveJson = json.encode(
+          {'type': 'room_leave', 'content': json.encode(roomLeave.toJson())});
+
+      _webSocketService.sendMessage(roomLeaveJson);
+    }
+
+    // Dispose of WebSocket invitation stream
+    _webSocketService.disposeInvitationStream();
+
+    // Reset game state
+    gameProvider.resetGame(newGame: true);
   }
 
   String _getPlayerName({required bool isWhite}) {
@@ -430,7 +507,11 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     if (stockfish != null) {
       stockfish!.stdin = StockfishUicCommand.stop;
     }
+
+    _webSocketService.disposeInvitationStream();
     _stockfishSubscription?.cancel();
+    gameProvider.resetGame(newGame: true);
+
     super.dispose();
   }
 }

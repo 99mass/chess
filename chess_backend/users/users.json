@@ -3,6 +3,12 @@
     "Breukh": {
       "id": "fd38ddb672a5323884125a37a79d33ce",
       "username": "Breukh",
+      "isnOline": false,
+      "isInRoom": false
+    },
+    "Pixel 4": {
+      "id": "5a0ff1394b2f8cd430576fd3ccb96df5",
+      "username": "Pixel 4",
       "isnOline": true,
       "isInRoom": false
     },
@@ -15,7 +21,7 @@
     "Pixel 6": {
       "id": "822c5d3b0a375f02d31dcbbff6248c0d",
       "username": "Pixel 6",
-      "isnOline": true,
+      "isnOline": false,
       "isInRoom": false
     }
   }

@@ -9,9 +9,9 @@ import 'package:provider/provider.dart';
 import 'package:chess/provider/game_provider.dart';
 
 class WaitingRoomScreen extends StatefulWidget {
-  final InvitationMessage? invitation;
-
-  const WaitingRoomScreen({super.key, this.invitation});
+  const WaitingRoomScreen({
+    super.key,
+  });
 
   @override
   State<WaitingRoomScreen> createState() => _WaitingRoomScreenState();
@@ -21,6 +21,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late WebSocketService _webSocketService;
+  late InvitationMessage? invitation;
 
   @override
   void initState() {
@@ -36,15 +37,11 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     final gameProvider = context.read<GameProvider>();
     gameProvider.loadUser();
 
+    invitation = gameProvider.currentInvitation;
+
     // Initialize WebSocket connection
     _webSocketService = WebSocketService();
     _webSocketService.connectWebSocket(context);
-
-    // Listen to invitations
-    _webSocketService.invitationStream.listen((invitation) {
-      _webSocketService.handleInvitationInteraction(
-          context, gameProvider.user, invitation);
-    });
   }
 
   @override
@@ -69,10 +66,12 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
           TextButton(
             child: const Text('Yes'),
             onPressed: () {
-              _webSocketService.sendInvitationCancel(widget.invitation!);
+              if (invitation != null) {
+                _webSocketService.sendInvitationCancel(invitation!);
+              }
 
               Timer(const Duration(seconds: 1), () {
-                Navigator.push(
+                Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const MainMenuScreen(),
@@ -116,9 +115,11 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Text(
-                widget.invitation!.toUsername != gameProvider.user.userName
-                    ? 'Waiting for ${widget.invitation!.toUsername}'
-                    : 'Waiting for ${widget.invitation!.fromUsername}',
+                invitation != null
+                    ? (invitation!.toUsername != gameProvider.user.userName
+                        ? 'Waiting for ${invitation!.toUsername}'
+                        : 'Waiting for ${invitation!.fromUsername}')
+                    : 'No invitation available',
                 style: const TextStyle(
                   fontSize: 25,
                   color: Colors.white,
