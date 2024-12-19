@@ -169,13 +169,17 @@ class GameProvider extends ChangeNotifier {
   }
 
   void setCompturMode({required bool value}) {
-    _computerMode = value;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _computerMode = value;
+      notifyListeners();
+    });
   }
 
   void setFriendsMode({required bool value}) {
-    _friendsMode = value;
-    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _friendsMode = value;
+      notifyListeners();
+    });
   }
 
   void setIsloadind({required bool value}) {
@@ -236,9 +240,23 @@ class GameProvider extends ChangeNotifier {
   bool get isFlipBoard => _isFlipBoard;
   bool get exitGame => _exitGame;
 
+  void setGameModel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _gameModel = null;
+      notifyListeners();
+    });
+  }
+
   void setExitGame({required bool value}) {
     _exitGame = value;
     Future.microtask(() {
+      notifyListeners();
+    });
+  }
+
+  void setIsFlipBoard({required bool value}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isFlipBoard = value;
       notifyListeners();
     });
   }
@@ -248,6 +266,10 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _isWhiterPlayer = false;
+
+  bool get isWhitePlayer => _isWhiterPlayer;
+
   // Method to initialize a multiplayer game
   void initializeMultiplayerGame(Map<String, dynamic> gameData) {
     // Parse game data into GameModel
@@ -256,18 +278,16 @@ class GameProvider extends ChangeNotifier {
 
     // Determine player's perspective and board orientation
     bool isPlayerWhite = _userProfile.id == _gameModel!.gameCreatorUid;
+    
+    _isWhiterPlayer = isPlayerWhite;
+
+    if (_gameModel!.gameCreatorUid == _userProfile.id) {
+      _isWhiterPlayer = !isPlayerWhite;
+    }
 
     // Set player's color and board orientation
     _player = isPlayerWhite ? Squares.white : Squares.black;
     _playerColor = isPlayerWhite ? PlayerColor.white : PlayerColor.black;
-
-    // Flip the board if the player is playing black
-    _flipBoard = !isPlayerWhite;
-    _isFlipBoard = _flipBoard;
-
-    print('flipBoard: $_flipBoard');
-    print('isWhitesTurn: ${gameModel!.isWhitesTurn}');
-    print('isPlayerWhite: $isPlayerWhite');
 
     // Initialize game with FEN position
     _game = bishop.Game(
@@ -333,6 +353,7 @@ class GameProvider extends ChangeNotifier {
   // ==========================================
   // New additions for managing online users and invitations
   List<UserProfile> _onlineUsers = [];
+  // ignore: prefer_final_fields
   List<InvitationMessage> _invitations = [];
   InvitationMessage? _currentInvitation;
 
@@ -408,16 +429,22 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-    void clearCurrentInvitation() {
+  void clearCurrentInvitation() {
     _currentInvitation = null;
     notifyListeners();
   }
 
-void updateCurrentInvitation(InvitationMessage invitation) {
+  void setCurrentInvitation() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _currentInvitation = null;
+      notifyListeners();
+    });
+  }
+
+  void updateCurrentInvitation(InvitationMessage invitation) {
     _currentInvitation = invitation;
     notifyListeners();
   }
-
 
   // Method to handle invitation rejection
   void handleInvitationRejection(
@@ -452,7 +479,7 @@ void updateCurrentInvitation(InvitationMessage invitation) {
     );
   }
 
-    void handleInvitationAccepted(
+  void handleInvitationAccepted(
       BuildContext context, InvitationMessage invitation) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -461,7 +488,6 @@ void updateCurrentInvitation(InvitationMessage invitation) {
       ),
     );
   }
-  
 
   // Dispose method to close streams
   @override

@@ -135,17 +135,13 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 
 func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) error {
 	log.Printf("🚀 Handling Invitation")
-    log.Printf("   From: %s", invitation.FromUsername)
-    log.Printf("   To: %s", invitation.ToUsername)
+	log.Printf("   From: %s", invitation.FromUsername)
+	log.Printf("   To: %s", invitation.ToUsername)
 
 	m.mutex.RLock()
 	_, fromExists := m.connections[invitation.FromUsername]
 	toConn, toExists := m.connections[invitation.ToUsername]
 	m.mutex.RUnlock()
-
-	log.Printf("🔌 Connection Status:")
-    log.Printf("   From User Connected: %v", fromExists)
-    log.Printf("   To User Connected: %v", toExists)
 
 	if invitation.Type == RoomLeave && !fromExists {
 		log.Printf("Cannot process room leave: user %s not online", invitation.FromUsername)
@@ -175,9 +171,7 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		} else {
 			log.Printf("❌ Recipient %s not connected", invitation.ToUsername)
 		}
-
 	case InvitationAccept:
-
 		// Générer un ID de room
 		if invitation.RoomID == "" {
 			invitation.RoomID = GenerateUniqueID()
@@ -205,49 +199,64 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		room.WhitesTime = "60"
 		room.BlacksTime = "60"
 
-		startMessage := WebSocketMessage{
-			Type: "game_start",
-			Content: string(mustJson(map[string]interface{}{
-				"gameId":            invitation.RoomID,
-				"gameCreatorUid":    room.GameCreatorUID,
-				"userId":            invitation.ToUserID,
-				"opponentUsername":  invitation.ToUsername,
-				"positonFen":        room.PositionFEN,
-				"winnerId":          "",
-				"whitesTime":        room.WhitesTime,
-				"blacksTime":        room.BlacksTime,
-				"whitsCurrentMove":  "",
-				"blacksCurrentMove": "",
-				"boardState":        room.BoardState,
-				"playState":         string(room.Status),
-				"isWhitesTurn":      room.IsWhitesTurn,
-				"isGameOver":        room.IsGameOver,
-				"squareState":       room.SquareState,
-				"moves":             room.Moves,
-			})),
+		// Message de base pour les deux joueurs
+		baseGameState := map[string]interface{}{
+			"gameId":            invitation.RoomID,
+			"gameCreatorUid":    invitation.ToUserID,
+			"positonFen":        room.PositionFEN,
+			"winnerId":          "",
+			"whitesTime":        room.WhitesTime,
+			"blacksTime":        room.BlacksTime,
+			"whitsCurrentMove":  "",
+			"blacksCurrentMove": "",
+			"boardState":        room.BoardState,
+			"playState":         string(room.Status),
+			"isWhitesTurn":      room.IsWhitesTurn,
+			"isGameOver":        room.IsGameOver,
+			"squareState":       room.SquareState,
+			"moves":             room.Moves,
 		}
 
-		// Envoyer le message de démarrage aux deux joueurs
+		// Préparer le message pour le créateur du jeu
+		creatorGameState := make(map[string]interface{})
+		for k, v := range baseGameState {
+			creatorGameState[k] = v
+		}
+		creatorGameState["userId"] = invitation.FromUserID
+		creatorGameState["opponentUsername"] = invitation.ToUsername
+
+		// Préparer le message pour l'invité
+		inviteeGameState := make(map[string]interface{})
+		for k, v := range baseGameState {
+			inviteeGameState[k] = v
+		}
+		inviteeGameState["userId"] = invitation.ToUserID
+		inviteeGameState["opponentUsername"] = invitation.FromUsername
+
+		// Envoyer les messages appropriés aux deux joueurs
 		fromConn, fromExists := m.connections[invitation.FromUsername]
 		toConn, toExists := m.connections[invitation.ToUsername]
 
 		if fromExists {
-			err := fromConn.WriteJSON(startMessage)
+			err := fromConn.WriteJSON(WebSocketMessage{
+				Type:    "game_start",
+				Content: string(mustJson(creatorGameState)),
+			})
 			if err != nil {
-				log.Printf("Error sending game start to from user: %v", err)
+				log.Printf("Error sending game start to creator: %v", err)
 			}
 		}
 
 		if toExists {
-			err := toConn.WriteJSON(startMessage)
+			err := toConn.WriteJSON(WebSocketMessage{
+				Type:    "game_start",
+				Content: string(mustJson(inviteeGameState)),
+			})
 			if err != nil {
-				log.Printf("Error sending game start to to user: %v", err)
+				log.Printf("Error sending game start to invitee: %v", err)
 			}
 		}
 	case InvitationReject:
-		log.Printf("Invitation Reject - FromUsername: %s, ToUsername: %s",
-			invitation.FromUsername,
-			invitation.ToUsername)
 
 		// Vérifier les connexions
 		fromConn, fromExists := m.connections[invitation.ToUsername]
@@ -302,7 +311,7 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
 		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
-		
+
 	}
 
 	return nil

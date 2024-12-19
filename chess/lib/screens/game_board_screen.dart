@@ -27,7 +27,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   late ChessTimer _chessTimer;
   StreamSubscription<String>? _stockfishSubscription;
   Timer? _timer;
-  bool isFlipBoard = false;
 
   @override
   void initState() {
@@ -63,7 +62,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         letOtherPlayerPlayFirst();
       }
     });
-    isFlipBoard = gameProvider.flipBoard;
   }
 
   Future<void> waitUntilReady({int timeoutSeconds = 10}) async {
@@ -185,14 +183,14 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       _webSocketService.disposeInvitationStream();
       _stockfishSubscription?.cancel();
       gameProvider.resetGame(newGame: true);
-      
+
       Timer(const Duration(seconds: 1), () {});
       Future.microtask(() => Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
-        ),
-      ));
+            context,
+            MaterialPageRoute(
+              builder: (context) => const MainMenuScreen(),
+            ),
+          ));
     }
 
     // ignore: deprecated_member_use
@@ -272,7 +270,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
                     isUser: false);
-                print('creator 2: ${gameProvider.flipBoard}');
 
                 return Center(
                   child: SingleChildScrollView(
@@ -283,7 +280,8 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                         SizedBox(
                           width: boardSize,
                           child: _buildUserTile(
-                            email: _getPlayerName(isWhite: false),
+                            email: _getPlayerName(
+                                isWhite: !gameProvider.isWhitePlayer),
                             avatarUrl: 'avatar.png',
                             isTurn: !_chessTimer.isWhiteTurn,
                             tileColor: Colors.white,
@@ -297,12 +295,13 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                             horizontal: 8.0,
                             vertical: 12.0,
                           ),
-                          child: gameProvider.computerMode
+                          // Friends Mode
+                          child: gameProvider.friendsMode
                               ? SizedBox(
                                   width: boardSize,
                                   height: boardSize,
                                   child: BoardController(
-                                    state: gameProvider.flipBoard
+                                    state: gameProvider.isWhitePlayer
                                         ? gameProvider.state.board.flipped()
                                         : gameProvider.state.board,
                                     playState: gameProvider.state.state,
@@ -319,11 +318,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                                         PromotionBehaviour.autoPremove,
                                   ),
                                 )
+                              // Computer Mode
                               : SizedBox(
                                   width: boardSize,
                                   height: boardSize,
                                   child: BoardController(
-                                    state: isFlipBoard
+                                    state: gameProvider.flipBoard
                                         ? gameProvider.state.board.flipped()
                                         : gameProvider.state.board,
                                     playState: gameProvider.state.state,
@@ -345,7 +345,8 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                         SizedBox(
                           width: boardSize,
                           child: _buildUserTile(
-                            email: _getPlayerName(isWhite: true),
+                            email: _getPlayerName(
+                                isWhite: gameProvider.isWhitePlayer),
                             avatarUrl: 'avatar.png',
                             isTurn: _chessTimer.isWhiteTurn,
                             tileColor: Colors.white,
@@ -393,6 +394,10 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
       final roomLeaveJson = json.encode(
           {'type': 'room_leave', 'content': json.encode(roomLeave.toJson())});
+      gameProvider.setGameModel();
+      gameProvider.setCurrentInvitation();
+      // gameProvider.setIsFlipBoard(value: false);
+      // gameProvider.setFriendsMode(value: false);
 
       _webSocketService.sendMessage(roomLeaveJson);
     }
@@ -404,17 +409,28 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     gameProvider.resetGame(newGame: true);
   }
 
+  // String _getPlayerName({required bool isWhite}) {
+  //   if (gameProvider.computerMode) {
+  //     return isWhite ? 'You' : 'Computer';
+  //   } else if (gameProvider.friendsMode && gameProvider.gameModel != null) {
+  //     return isWhite
+  //         ? (gameProvider.playerColor == PlayerColor.white
+  //             ? gameProvider.user.userName
+  //             : gameProvider.opponentUsername)
+  //         : (gameProvider.playerColor == PlayerColor.white
+  //             ? gameProvider.opponentUsername
+  //             : gameProvider.user.userName);
+
+  //   }
+  //   return isWhite ? 'Player 1' : 'Player 2';
+  // }
   String _getPlayerName({required bool isWhite}) {
     if (gameProvider.computerMode) {
       return isWhite ? 'You' : 'Computer';
     } else if (gameProvider.friendsMode && gameProvider.gameModel != null) {
       return isWhite
-          ? (gameProvider.playerColor == PlayerColor.white
-              ? gameProvider.user.userName
-              : gameProvider.opponentUsername)
-          : (gameProvider.playerColor == PlayerColor.white
-              ? gameProvider.opponentUsername
-              : gameProvider.user.userName);
+          ? gameProvider.gameModel!.opponentUsername
+          : gameProvider.user.userName;
     }
     return isWhite ? 'Player 1' : 'Player 2';
   }
@@ -508,6 +524,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       stockfish!.stdin = StockfishUicCommand.stop;
     }
 
+    if (gameProvider.friendsMode) {
+      gameProvider.setGameModel();
+      gameProvider.setCurrentInvitation();
+      // gameProvider.setIsFlipBoard(value: false);
+      // gameProvider.setFriendsMode(value: false);
+    }
     _webSocketService.disposeInvitationStream();
     _stockfishSubscription?.cancel();
     gameProvider.resetGame(newGame: true);

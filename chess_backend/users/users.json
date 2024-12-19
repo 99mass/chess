@@ -21,7 +21,7 @@
     "Pixel 6": {
       "id": "822c5d3b0a375f02d31dcbbff6248c0d",
       "username": "Pixel 6",
-      "isnOline": false,
+      "isnOline": true,
       "isInRoom": false
     }
   }
