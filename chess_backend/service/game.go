@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -37,12 +38,9 @@ type ChessGameRoom struct {
 
 // You'll need to define the Move struct as well
 type Move struct {
-	// Define the fields of a Move based on your Dart Move class
-	// For example:
 	From  string `json:"from"`
 	To    string `json:"to"`
 	Piece string `json:"piece"`
-	// Add other relevant fields
 }
 
 // Room status types
@@ -128,7 +126,7 @@ func (rm *RoomManager) RemoveRoom(roomID string) {
 func (room *ChessGameRoom) AddConnection(username string, conn *websocket.Conn) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
-
+	log.Printf("Adding connection for %s to room %s", username, room.RoomID)
 	room.Connections[username] = conn
 }
 

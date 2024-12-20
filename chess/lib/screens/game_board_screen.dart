@@ -22,8 +22,8 @@ class GameBoardScreen extends StatefulWidget {
 
 class _GameBoardScreenState extends State<GameBoardScreen> {
   late WebSocketService _webSocketService;
+  late GameProvider _gameProvider;
   late Stockfish? stockfish;
-  late GameProvider gameProvider;
   late ChessTimer _chessTimer;
   StreamSubscription<String>? _stockfishSubscription;
   Timer? _timer;
@@ -31,18 +31,20 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   @override
   void initState() {
     super.initState();
+    _gameProvider = context.read<GameProvider>();
 
-    _webSocketService = WebSocketService();
-    _webSocketService.connectWebSocket(context);
-    gameProvider = context.read<GameProvider>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _webSocketService = WebSocketService();
+      _webSocketService.connectWebSocket(context);
+    });
 
     // Initialize stockfish only for computer mode
-    stockfish = gameProvider.computerMode ? StockfishInstance.instance : null;
-    gameProvider.resetGame(newGame: false);
+    stockfish = _gameProvider.computerMode ? StockfishInstance.instance : null;
+    _gameProvider.resetGame(newGame: false);
 
     _chessTimer = ChessTimer(
-      initialMinutes: gameProvider.gameTime,
-      startWithWhite: gameProvider.playerColor == PlayerColor.white,
+      initialMinutes: _gameProvider.gameTime,
+      startWithWhite: _gameProvider.playerColor == PlayerColor.white,
       onTimeExpired: () {
         _chessTimer.reset();
       },
@@ -53,12 +55,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
     _chessTimer.start(
       context: context,
-      playerColor: gameProvider.playerColor,
+      playerColor: _gameProvider.playerColor,
     );
 
     // Handle first move based on game mode
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (gameProvider.computerMode) {
+      if (_gameProvider.computerMode) {
         letOtherPlayerPlayFirst();
       }
     });
@@ -79,44 +81,61 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   }
 
   void _onMove(Move move) async {
-    gameProvider = context.read<GameProvider>();
+    _gameProvider = context.read<GameProvider>();
 
-    Future<bool> result = gameProvider.makeSquaresMove(move, context: context);
-    if (await result) {
-      _chessTimer.switchTurn();
+    // Pour le mode ami (multiplayer)
+    if (_gameProvider.friendsMode) {
+      bool result = await _gameProvider.makeSquaresMove(move, context: context);
 
-      // Determine next action based on game mode
-      if (gameProvider.computerMode) {
-        gameProvider.setSquareState().whenComplete(() {
-          if (gameProvider.state.state == PlayState.theirTurn &&
-              !gameProvider.aiThinking) {
+      if (result) {
+        // _chessTimer.switchTurn();
+        _gameProvider.setIsMyTurn(value: false);
+        _gameProvider.setIsOpponentTurn(value: true);
+
+        final moveData = {
+          'gameId': _gameProvider.gameId,
+          'fromUserId': _gameProvider.user.id,
+          'toUserId': _gameProvider.gameModel?.userId ?? '',
+          'toUsername': _gameProvider.gameModel?.opponentUsername ?? '',
+          // ignore: unnecessary_null_comparison
+          'move': move == null
+              ? null
+              : {
+                  'from': move.from,
+                  'to': move.to,
+                  'promo': move.promo,
+                },
+          'fen': _gameProvider.getPositionFen(),
+          'isWhitesTurn': !_gameProvider.gameModel!.isWhitesTurn,
+        };
+
+        _webSocketService.sendMessage(json
+            .encode({'type': 'game_move', 'content': json.encode(moveData)}));
+
+        // Met à jour l'état du jeu
+        await _gameProvider.setSquareState();
+      }
+    }
+    // Pour le mode ordinateur
+    else if (_gameProvider.computerMode) {
+      bool result = await _gameProvider.makeSquaresMove(move, context: context);
+      if (result) {
+        _chessTimer.switchTurn();
+
+        _gameProvider.setSquareState().whenComplete(() {
+          if (_gameProvider.state.state == PlayState.theirTurn &&
+              !_gameProvider.aiThinking) {
             _triggerAiMove();
           }
         });
-      } else if (gameProvider.friendsMode) {
-        // First, attempt to make the move locally
-        Future<bool> result =
-            gameProvider.makeSquaresMove(move, context: context);
-
-        if (await result) {
-          _chessTimer.switchTurn();
-
-          // Send move via WebSocket
-          _webSocketService.sendGameMove(gameProvider, move);
-
-          // Update game state
-          gameProvider.setSquareState().whenComplete(() {
-            // Additional state management if needed
-          });
-        }
       }
     }
   }
 
   void letOtherPlayerPlayFirst() async {
-    if (gameProvider.computerMode &&
-        gameProvider.state.state == PlayState.theirTurn &&
-        !gameProvider.aiThinking) {
+    if (_gameProvider.computerMode &&
+        _gameProvider.state.state == PlayState.theirTurn &&
+        !_gameProvider.aiThinking) {
       _triggerAiMove();
     }
   }
@@ -131,9 +150,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       return;
     }
 
-    gameProvider.setAiThinking(true);
+    _gameProvider.setAiThinking(true);
 
-    int gameLevel = switch (gameProvider.gameDifficulty) {
+    int gameLevel = switch (_gameProvider.gameDifficulty) {
       GameDifficulty.easy => 1,
       GameDifficulty.medium => 2,
       GameDifficulty.hard => 3,
@@ -141,7 +160,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
     // Envoyer les commandes à Stockfish
     stockfish!.stdin =
-        '${StockfishUicCommand.position} ${gameProvider.getPositionFen()}';
+        '${StockfishUicCommand.position} ${_gameProvider.getPositionFen()}';
     stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 1000}';
 
     // Désabonner les anciens écouteurs s'il y en a
@@ -153,11 +172,11 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         final bestMove = event.split(' ')[1];
 
         // Vérifier si le jeu est terminé ou si ce n'est pas le bon tour
-        if (gameProvider.state.state != PlayState.theirTurn) return;
+        if (_gameProvider.state.state != PlayState.theirTurn) return;
 
-        gameProvider.makeStringMove(bestMove, context: context);
-        gameProvider.setAiThinking(false);
-        gameProvider.setSquareState().whenComplete(() {
+        _gameProvider.makeStringMove(bestMove, context: context);
+        _gameProvider.setAiThinking(false);
+        _gameProvider.setSquareState().whenComplete(() {
           _chessTimer.switchTurn();
         });
       }
@@ -166,23 +185,22 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    gameProvider = context.read<GameProvider>();
-
-    if (gameProvider.isGameEnd) {
+    _gameProvider = context.read<GameProvider>();
+    if (_gameProvider.isGameEnd) {
       _chessTimer.stop();
       _chessTimer.dispose();
     }
-    if (gameProvider.exitGame) {
+    if (_gameProvider.exitGame) {
       _chessTimer.stop();
       _chessTimer.dispose();
       _timer?.cancel();
       if (stockfish != null) {
         stockfish!.stdin = StockfishUicCommand.stop;
+        _webSocketService.disposeInvitationStream();
+        _stockfishSubscription?.cancel();
       }
 
-      _webSocketService.disposeInvitationStream();
-      _stockfishSubscription?.cancel();
-      gameProvider.resetGame(newGame: true);
+      _gameProvider.resetGame(newGame: true);
 
       Timer(const Duration(seconds: 1), () {});
       Future.microtask(() => Navigator.pushReplacement(
@@ -230,9 +248,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
               backgroundColor: Colors.black54,
               appBar: AppBar(
                 title: Text(
-                  gameProvider.computerMode
+                  _gameProvider.computerMode
                       ? 'Computer Game'
-                      : gameProvider.friendsMode
+                      : _gameProvider.friendsMode
                           ? 'Multiplayer Game'
                           : 'Chess Game',
                   style: const TextStyle(
@@ -246,9 +264,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                   IconButton(
                     onPressed: () {
                       _chessTimer.reset();
-                      gameProvider.resetGame(newGame: false);
+                      _gameProvider.resetGame(newGame: false);
                       if (mounted) {
-                        if (gameProvider.computerMode) {
+                        if (_gameProvider.computerMode) {
                           letOtherPlayerPlayFirst();
                         }
                       }
@@ -262,14 +280,20 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
               ),
               body: Consumer<GameProvider>(
                   builder: (context, gameProvider, child) {
+
                 String whiteRemainingTime = getTimerToDisplay(
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
-                    isUser: true);
+                    isUser: gameProvider.friendsMode
+                        ? _gameProvider.isMyTurn
+                        : true);
                 String blackRemainingTime = getTimerToDisplay(
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
-                    isUser: false);
+                    isUser: gameProvider.friendsMode
+                        ? _gameProvider.isOpponentTurn
+                        : false);
+              
 
                 return Center(
                   child: SingleChildScrollView(
@@ -283,7 +307,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                             email: _getPlayerName(
                                 isWhite: !gameProvider.isWhitePlayer),
                             avatarUrl: 'avatar.png',
-                            isTurn: !_chessTimer.isWhiteTurn,
+                            isTurn: gameProvider.friendsMode
+                                ? _gameProvider.isOpponentTurn
+                                : !_chessTimer.isWhiteTurn,
                             tileColor: Colors.white,
                             textColor: Colors.black,
                             timer: blackRemainingTime,
@@ -348,7 +374,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                             email: _getPlayerName(
                                 isWhite: gameProvider.isWhitePlayer),
                             avatarUrl: 'avatar.png',
-                            isTurn: _chessTimer.isWhiteTurn,
+                            isTurn: gameProvider.friendsMode
+                                ? _gameProvider.isMyTurn
+                                : _chessTimer.isWhiteTurn,
                             tileColor: Colors.white,
                             textColor: Colors.black,
                             timer: whiteRemainingTime,
@@ -374,30 +402,27 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
     // Stop Stockfish if it's running
     if (stockfish != null) {
+      // Cancel Stockfish subscription
+      _stockfishSubscription?.cancel();
       stockfish!.stdin = StockfishUicCommand.stop;
     }
 
-    // Cancel Stockfish subscription
-    _stockfishSubscription?.cancel();
-
     // Handle WebSocket room leaving for multiplayer mode
-    if (gameProvider.friendsMode) {
+    if (_gameProvider.friendsMode) {
       final roomLeave = InvitationMessage(
         type: 'room_leave',
-        fromUserId: gameProvider.user.id,
-        fromUsername: gameProvider.user.userName,
-        toUserId: gameProvider.gameModel!.userId,
-        toUsername: gameProvider.opponentUsername,
+        fromUserId: _gameProvider.user.id,
+        fromUsername: _gameProvider.user.userName,
+        toUserId: _gameProvider.gameModel!.userId,
+        toUsername: _gameProvider.opponentUsername,
         timestamp: DateTime.now().millisecondsSinceEpoch,
-        roomId: gameProvider.gameModel!.gameId,
+        roomId: _gameProvider.gameModel!.gameId,
       );
 
       final roomLeaveJson = json.encode(
           {'type': 'room_leave', 'content': json.encode(roomLeave.toJson())});
-      gameProvider.setGameModel();
-      gameProvider.setCurrentInvitation();
-      // gameProvider.setIsFlipBoard(value: false);
-      // gameProvider.setFriendsMode(value: false);
+      _gameProvider.setGameModel();
+      _gameProvider.setCurrentInvitation();
 
       _webSocketService.sendMessage(roomLeaveJson);
     }
@@ -406,31 +431,16 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     _webSocketService.disposeInvitationStream();
 
     // Reset game state
-    gameProvider.resetGame(newGame: true);
+    _gameProvider.resetGame(newGame: true);
   }
 
-  // String _getPlayerName({required bool isWhite}) {
-  //   if (gameProvider.computerMode) {
-  //     return isWhite ? 'You' : 'Computer';
-  //   } else if (gameProvider.friendsMode && gameProvider.gameModel != null) {
-  //     return isWhite
-  //         ? (gameProvider.playerColor == PlayerColor.white
-  //             ? gameProvider.user.userName
-  //             : gameProvider.opponentUsername)
-  //         : (gameProvider.playerColor == PlayerColor.white
-  //             ? gameProvider.opponentUsername
-  //             : gameProvider.user.userName);
-
-  //   }
-  //   return isWhite ? 'Player 1' : 'Player 2';
-  // }
   String _getPlayerName({required bool isWhite}) {
-    if (gameProvider.computerMode) {
+    if (_gameProvider.computerMode) {
       return isWhite ? 'You' : 'Computer';
-    } else if (gameProvider.friendsMode && gameProvider.gameModel != null) {
+    } else if (_gameProvider.friendsMode && _gameProvider.gameModel != null) {
       return isWhite
-          ? gameProvider.gameModel!.opponentUsername
-          : gameProvider.user.userName;
+          ? _gameProvider.gameModel!.opponentUsername
+          : _gameProvider.user.userName;
     }
     return isWhite ? 'Player 1' : 'Player 2';
   }
@@ -516,23 +526,30 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    // Store the reference safely here
+    _gameProvider = Provider.of<GameProvider>(context, listen: false);
+    super.didChangeDependencies();
+  }
+
+  @override
   void dispose() {
     _chessTimer.stop();
     _chessTimer.dispose();
+
     _timer?.cancel();
+
     if (stockfish != null) {
       stockfish!.stdin = StockfishUicCommand.stop;
+      _stockfishSubscription?.cancel();
     }
 
-    if (gameProvider.friendsMode) {
-      gameProvider.setGameModel();
-      gameProvider.setCurrentInvitation();
-      // gameProvider.setIsFlipBoard(value: false);
-      // gameProvider.setFriendsMode(value: false);
+    if (_gameProvider.friendsMode) {
+      _gameProvider.setGameModel();
+      _gameProvider.setCurrentInvitation();
     }
     _webSocketService.disposeInvitationStream();
-    _stockfishSubscription?.cancel();
-    gameProvider.resetGame(newGame: true);
+    _gameProvider.resetGame(newGame: true);
 
     super.dispose();
   }

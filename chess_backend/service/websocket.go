@@ -91,12 +91,13 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 
 		switch message.Type {
 		case "request_online_users":
-			// Explicitly send online users to the requesting client
+
 			onlineUsers := m.getCurrentOnlineUsers()
 			conn.WriteJSON(WebSocketMessage{
 				Type:    "online_users",
 				Content: string(mustJson(onlineUsers)),
 			})
+
 		case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel", "room_leave":
 			var invitation InvitationMessage
 			if err := json.Unmarshal([]byte(message.Content), &invitation); err != nil {
@@ -108,6 +109,7 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 				log.Printf("Failed to process invitation: %v", err)
 			}
 			m.broadcastOnlineUsers()
+
 		case "leave_room":
 			var leaveRequest struct {
 				Username string `json:"username"`
@@ -125,6 +127,50 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 
 			// Notify all clients about updated online users
 			m.broadcastOnlineUsers()
+
+			// moves
+		case "game_move":
+			var moveData struct {
+				GameID       string      `json:"gameId"`
+				FromUserID   string      `json:"fromUserId"`
+				ToUserID     string      `json:"toUserId"`
+				ToUsername   string      `json:"toUsername"`
+				Move         interface{} `json:"move"`
+				FEN          string      `json:"fen"`
+				IsWhitesTurn bool        `json:"isWhitesTurn"`
+			}
+
+			if err := json.Unmarshal([]byte(message.Content), &moveData); err != nil {
+				log.Printf("Error parsing move data: %v", err)
+				continue
+			}
+
+			// Récupérer la room
+			room, exists := m.roomManager.GetRoom(moveData.GameID)
+			if !exists {
+				log.Printf("Room not found: %s", moveData.GameID)
+				continue
+			}
+
+			// Mettre à jour l'état du jeu
+			room.mutex.Lock()
+			room.PositionFEN = moveData.FEN
+			room.IsWhitesTurn = moveData.IsWhitesTurn
+			room.mutex.Unlock()
+
+			// Envoyer le mouvement à l'autre joueur
+			if otherConn, exists := room.Connections[moveData.ToUsername]; exists {
+				if err := otherConn.WriteJSON(WebSocketMessage{
+					Type:    "game_move",
+					Content: message.Content,
+				}); err != nil {
+					log.Printf("Error sending move to other player: %v", err)
+				} else {
+					log.Printf("Move sent to player %s", moveData.ToUsername)
+				}
+			} else {
+				log.Printf("Connection not found for player %s", moveData.ToUsername)
+			}
 
 		default:
 			log.Printf("Unhandled message type: %s", message.Type)
@@ -196,8 +242,8 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		room.PositionFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 		room.IsWhitesTurn = true
 		room.IsGameOver = false
-		room.WhitesTime = "60"
-		room.BlacksTime = "60"
+		room.WhitesTime = "10"
+		room.BlacksTime = "10"
 
 		// Message de base pour les deux joueurs
 		baseGameState := map[string]interface{}{
@@ -238,6 +284,7 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		toConn, toExists := m.connections[invitation.ToUsername]
 
 		if fromExists {
+			room.AddConnection(invitation.FromUsername, fromConn)
 			err := fromConn.WriteJSON(WebSocketMessage{
 				Type:    "game_start",
 				Content: string(mustJson(creatorGameState)),
@@ -248,6 +295,7 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 
 		if toExists {
+			room.AddConnection(invitation.ToUsername, toConn)
 			err := toConn.WriteJSON(WebSocketMessage{
 				Type:    "game_start",
 				Content: string(mustJson(inviteeGameState)),

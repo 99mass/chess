@@ -31,19 +31,21 @@ class ChessTimer {
   void start(
       {required BuildContext context, required PlayerColor playerColor}) {
     _activeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_isWhiteTurn == (playerColor == PlayerColor.white)) {
-        _whiteRemainingTime--;
-        if (_whiteRemainingTime <= 0) {
-          _handleTimeExpired(context);
+ 
+        if (_isWhiteTurn == (playerColor == PlayerColor.white)) {
+          _whiteRemainingTime--;
+          if (_whiteRemainingTime <= 0) {
+            _handleTimeExpired(context);
+          }
+        } else {
+          _blackRemainingTime--;
+          if (_blackRemainingTime <= 0) {
+            _handleTimeExpired(context);
+          }
         }
-      } else {
-        _blackRemainingTime--;
-        if (_blackRemainingTime <= 0) {
-          _handleTimeExpired(context);
-        }
-      }
 
-      onTimerUpdate?.call();
+        onTimerUpdate?.call();
+
     });
   }
 

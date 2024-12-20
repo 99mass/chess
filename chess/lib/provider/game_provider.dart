@@ -224,14 +224,19 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ----------------Game With Friend ---------------- //
   String _gameId = '';
   String _opponentUsername = '';
   bool _exitGame = false;
+  bool _isWhiterPlayer = false;
+  bool _isMyTurn = false;
+  bool _isOpponentTurn = false;
 
   // Multiplayer game data
   GameModel? _gameModel;
   bool _isFlipBoard = false;
+  bool get isWhitePlayer => _isWhiterPlayer;
+  bool get isMyTurn => _isMyTurn;
+  bool get isOpponentTurn => _isOpponentTurn;
 
   // Existing getters...
   GameModel? get gameModel => _gameModel;
@@ -245,6 +250,16 @@ class GameProvider extends ChangeNotifier {
       _gameModel = null;
       notifyListeners();
     });
+  }
+
+  void setIsMyTurn({required bool value}) {
+    _isMyTurn = value;
+    notifyListeners();
+  }
+
+  void setIsOpponentTurn({required bool value}) {
+    _isOpponentTurn = value;
+    notifyListeners();
   }
 
   void setExitGame({required bool value}) {
@@ -266,11 +281,7 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _isWhiterPlayer = false;
-
-  bool get isWhitePlayer => _isWhiterPlayer;
-
-  // Method to initialize a multiplayer game
+  // initialize a multiplayer game
   void initializeMultiplayerGame(Map<String, dynamic> gameData) {
     // Parse game data into GameModel
     _gameModel = GameModel.fromJson(gameData);
@@ -278,11 +289,16 @@ class GameProvider extends ChangeNotifier {
 
     // Determine player's perspective and board orientation
     bool isPlayerWhite = _userProfile.id == _gameModel!.gameCreatorUid;
-    
+
     _isWhiterPlayer = isPlayerWhite;
 
     if (_gameModel!.gameCreatorUid == _userProfile.id) {
       _isWhiterPlayer = !isPlayerWhite;
+      _isMyTurn = true;
+      _isOpponentTurn = false;
+    } else {
+      _isMyTurn = false;
+      _isOpponentTurn = true;
     }
 
     // Set player's color and board orientation
@@ -318,40 +334,35 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Method to update game state from move
-  void updateGameState(String fen, bool isWhitesTurn) {
-    _game = bishop.Game(variant: bishop.Variant.standard(), fen: fen);
-    _state = _game.squaresState(_player);
-    _player = isWhitesTurn ? Squares.white : Squares.black;
-    _playerColor =
-        _player == Squares.white ? PlayerColor.white : PlayerColor.black;
+  void handleOpponentMove(Map<String, dynamic> moveData) {
+    // Vérifier si ce n'est pas notre propre mouvement
+    if (moveData['fromUserId'] == user.id) {
+      return;
+    }
 
-    notifyListeners();
-  }
+    // Determine player's perspective and board orientation
+    bool isPlayerWhite = _userProfile.id == _gameModel!.gameCreatorUid;
 
-  void synchronizeMove(String move) {
+    _isWhiterPlayer = isPlayerWhite;
+
+    if (_gameModel!.gameCreatorUid == _userProfile.id) {
+      _isWhiterPlayer = !isPlayerWhite;
+    }
+
     try {
-      // Attempt to make the move
-      bool result = _game.makeMoveString(move);
+      // Mettre à jour l'état du jeu avec la nouvelle position FEN
+      _game =
+          bishop.Game(variant: bishop.Variant.standard(), fen: moveData['fen']);
 
-      if (result) {
-        _state = _game.squaresState(_player);
-        _isGameEnd = _game.gameOver;
+      _state = _game.squaresState(_player);
+      _gameModel?.isWhitesTurn = moveData['isWhitesTurn'];
 
-        // Switch player
-        _player = _player == Squares.white ? Squares.black : Squares.white;
-        _playerColor =
-            _player == Squares.white ? PlayerColor.white : PlayerColor.black;
-
-        notifyListeners();
-      }
+      notifyListeners();
     } catch (e) {
-      print('Error synchronizing move: $e');
+      print('Error handling opponent move: $e');
     }
   }
 
-  // ==========================================
-  // New additions for managing online users and invitations
   List<UserProfile> _onlineUsers = [];
   // ignore: prefer_final_fields
   List<InvitationMessage> _invitations = [];
@@ -363,9 +374,7 @@ class GameProvider extends ChangeNotifier {
   final StreamController<List<InvitationMessage>> _invitationsController =
       StreamController<List<InvitationMessage>>.broadcast();
 
-  // Getters for online users and invitations
   List<UserProfile> get onlineUsers => _onlineUsers;
-  // List<InvitationMessage> get invitations => _invitations;
 
   Stream<List<UserProfile>> get onlineUsersStream =>
       _onlineUsersController.stream;
@@ -423,7 +432,6 @@ class GameProvider extends ChangeNotifier {
       timestamp: DateTime.now().millisecondsSinceEpoch,
     );
 
-    // Mettre à jour le nom de l'opponent
     setOpponentUsername(username: toUser.userName);
 
     notifyListeners();
@@ -469,7 +477,6 @@ class GameProvider extends ChangeNotifier {
   void handleInvitationCancellation(
       BuildContext context, InvitationMessage invitation) {
     removeInvitation(invitation);
-    // Additional logic for handling cancellation can be added here
     Navigator.of(context).popUntil((route) => route.isFirst);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

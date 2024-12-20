@@ -9,13 +9,13 @@
     "Pixel 4": {
       "id": "5a0ff1394b2f8cd430576fd3ccb96df5",
       "username": "Pixel 4",
-      "isnOline": true,
+      "isnOline": false,
       "isInRoom": false
     },
     "Pixel 5": {
       "id": "9ef5a8dfe2f0d4564fd584e098d78488",
       "username": "Pixel 5",
-      "isnOline": true,
+      "isnOline": false,
       "isInRoom": false
     },
     "Pixel 6": {

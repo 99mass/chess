@@ -20,7 +20,12 @@ class WebSocketService {
   WebSocketChannel? _channel;
   StreamController<List<UserProfile>> _onlineUsersController =
       StreamController<List<UserProfile>>.broadcast();
+
   var _invitationController = StreamController<InvitationMessage>.broadcast();
+
+  final _moveController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get moveStream => _moveController.stream;
+
   Timer? _reconnectTimer;
   bool _isConnected = false;
 
@@ -82,8 +87,6 @@ class WebSocketService {
       print('🌐 Raw WebSocket Message Received: $message');
 
       final Map<String, dynamic> data = json.decode(message);
-      print('📬 Message Type: ${data['type']}');
-      print('📦 Message Content: ${data['content']}');
 
       switch (data['type']) {
         case 'online_users':
@@ -133,13 +136,13 @@ class WebSocketService {
         case 'game_start':
           if (context != null && context.mounted) {
             final gameData = json.decode(data['content']);
-            print('Received Game Start Data: $gameData');
+            // print('📦 Received Game Start Data: $gameData');
 
             try {
               Provider.of<GameProvider>(context, listen: false)
                   .initializeMultiplayerGame(gameData);
 
-              Navigator.of(context).pushReplacement(
+              Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const GameBoardScreen(),
                 ),
@@ -175,24 +178,20 @@ class WebSocketService {
           }
           break;
         // -------------Game Move
-
         case 'game_move':
-          if (context != null) {
-            final gameData = json.decode(data['content']);
-            print('Received Game Move: $gameData');
-
+          if (context != null && context.mounted) {
+            final moveData = json.decode(data['content']);
             try {
+              print('📦 Received Game Move Data: $moveData');
               final gameProvider =
                   Provider.of<GameProvider>(context, listen: false);
 
-              // Extract move and game state information
-              String moveString = gameData['move'];
-              String newFen = gameData['positionFen'] ?? '';
-              bool isWhitesTurn = gameData['isWhitesTurn'] ?? true;
-
-              // Synchronize move in game provider
-              gameProvider.synchronizeMove(moveString);
-              gameProvider.updateGameState(newFen, isWhitesTurn);
+              // Vérifier si le move vient de l'adversaire
+              if (moveData['fromUserId'] != gameProvider.user.id) {
+                gameProvider.handleOpponentMove(moveData);
+                gameProvider.setIsMyTurn(value: true);
+                gameProvider.setIsOpponentTurn(value: false);
+              }
             } catch (e) {
               print('Error processing game move: $e');
             }
@@ -209,7 +208,6 @@ class WebSocketService {
 
   void sendGameInvitation(BuildContext context,
       {required UserProfile currentUser, required UserProfile toUser}) {
- 
     if (!_isConnected) {
       print('❌ WebSocket Disconnected');
       ScaffoldMessenger.of(context).showSnackBar(
