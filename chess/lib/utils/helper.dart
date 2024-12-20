@@ -3,49 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:squares/squares.dart';
 
-// String getTimerToDisplay({
-//   required GameProvider gameProvider,
-//   required ChessTimer chessTimer,
-//   required bool isUser,
-// }) {
-//   // Pour le mode multijoueur (user vs user)
-//   if (gameProvider.friendsMode) {
-//     // Si c'est le joueur du bas (isUser = true)
-//     if (isUser) {
-//       // Si le joueur du bas joue les blancs
-//       if (gameProvider.isWhitePlayer) {
-//         return chessTimer.formatTime(chessTimer.whiteRemainingTime);
-//       } else {
-//         // Si le joueur du bas joue les noirs
-//         return chessTimer.formatTime(chessTimer.blackRemainingTime);
-//       }
-//     } else {
-//       // Pour le joueur du haut (isUser = false)
-//       // Si le joueur du bas joue les blancs, le haut joue les noirs
-//       if (gameProvider.isWhitePlayer) {
-//         return chessTimer.formatTime(chessTimer.blackRemainingTime);
-//       } else {
-//         // Si le joueur du bas joue les noirs, le haut joue les blancs
-//         return chessTimer.formatTime(chessTimer.whiteRemainingTime);
-//       }
-//     }
-//   }
-
-//   // Pour le mode ordinateur ou autre
-//   if (isUser) {
-//     if (gameProvider.player == Squares.white) {
-//       return chessTimer.formatTime(chessTimer.whiteRemainingTime);
-//     } else {
-//       return chessTimer.formatTime(chessTimer.blackRemainingTime);
-//     }
-//   } else {
-//     if (gameProvider.player == Squares.white) {
-//       return chessTimer.formatTime(chessTimer.blackRemainingTime);
-//     } else {
-//       return chessTimer.formatTime(chessTimer.whiteRemainingTime);
-//     }
-//   }
-// }
 String getTimerToDisplay({
   required GameProvider gameProvider,
   required ChessTimer chessTimer,
