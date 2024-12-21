@@ -9,23 +9,23 @@ String getTimerToDisplay({
   required bool isUser,
 }) {
   String timer = '';
-  // check if is user
-  
-  if (isUser) {
-    if (gameProvider.player == Squares.white) {
-      timer = chessTimer.formatTime(chessTimer.whiteRemainingTime);
-    }
-    if (gameProvider.player == Squares.black) {
-      timer = chessTimer.formatTime(chessTimer.blackRemainingTime);
-    }
+
+  if (gameProvider.friendsMode) {
+    timer = isUser
+        ? gameProvider.player == Squares.white
+            ? chessTimer.formatTime(gameProvider.lastWhiteTime)
+            : chessTimer.formatTime(gameProvider.lastBlackTime)
+        : gameProvider.player == Squares.black
+            ? chessTimer.formatTime(gameProvider.lastWhiteTime)
+            : chessTimer.formatTime(gameProvider.lastBlackTime);
   } else {
-    // if its not user do the opposite
-    if (gameProvider.player == Squares.white) {
-      timer = chessTimer.formatTime(chessTimer.blackRemainingTime);
-    }
-    if (gameProvider.player == Squares.black) {
-      timer = chessTimer.formatTime(chessTimer.whiteRemainingTime);
-    }
+    timer = isUser
+        ? gameProvider.player == Squares.white
+            ? chessTimer.formatTime(chessTimer.whiteRemainingTime)
+            : chessTimer.formatTime(chessTimer.blackRemainingTime)
+        : gameProvider.player == Squares.black
+            ? chessTimer.formatTime(chessTimer.whiteRemainingTime)
+            : chessTimer.formatTime(chessTimer.blackRemainingTime);
   }
 
   return timer;

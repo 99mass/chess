@@ -182,7 +182,6 @@ class WebSocketService {
           if (context != null && context.mounted) {
             final moveData = json.decode(data['content']);
             try {
-              print('📦 Received Game Move Data: $moveData');
               final gameProvider =
                   Provider.of<GameProvider>(context, listen: false);
 
@@ -195,6 +194,25 @@ class WebSocketService {
             } catch (e) {
               print('Error processing game move: $e');
             }
+          }
+          break;
+        case 'time_update':
+          if (context != null && context.mounted) {
+            final timer = json.decode(data['content']);
+            final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+            gameProvider.setLastWhiteTime(value: timer['whiteTime']);
+            gameProvider.setLastBlackTime(value: timer['blackTime']);
+          }
+          break;
+          case 'game_over':
+          if (context != null && context.mounted) {
+            final gameOverData = json.decode(data['content']);
+            print('📦📦 Received Game Over Data: $gameOverData');
+             final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+                gameProvider.setGameOverByTime(value: gameOverData['isGameOver']);
+                gameProvider.setWinnerName(value: gameOverData['winner']);
           }
           break;
 

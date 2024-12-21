@@ -2,9 +2,11 @@
 
 import 'dart:async';
 import 'package:chess/constant/constants.dart';
+import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class ChessTimer {
   final int initialMinutes;
@@ -31,21 +33,25 @@ class ChessTimer {
   void start(
       {required BuildContext context, required PlayerColor playerColor}) {
     _activeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
- 
-        if (_isWhiteTurn == (playerColor == PlayerColor.white)) {
-          _whiteRemainingTime--;
-          if (_whiteRemainingTime <= 0) {
-            _handleTimeExpired(context);
-          }
-        } else {
-          _blackRemainingTime--;
-          if (_blackRemainingTime <= 0) {
-            _handleTimeExpired(context);
-          }
+      final gameProvider = Provider.of<GameProvider>(context, listen: false);
+
+      if (gameProvider.friendsMode) {
+        return;
+      }
+
+      if (_isWhiteTurn == (playerColor == PlayerColor.white)) {
+        _whiteRemainingTime--;
+        if (_whiteRemainingTime <= 0) {
+          _handleTimeExpired(context);
         }
+      } else {
+        _blackRemainingTime--;
+        if (_blackRemainingTime <= 0) {
+          _handleTimeExpired(context);
+        }
+      }
 
-        onTimerUpdate?.call();
-
+      onTimerUpdate?.call();
     });
   }
 

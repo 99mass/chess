@@ -139,6 +139,7 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 				FEN          string      `json:"fen"`
 				IsWhitesTurn bool        `json:"isWhitesTurn"`
 			}
+			
 
 			if err := json.Unmarshal([]byte(message.Content), &moveData); err != nil {
 				log.Printf("Error parsing move data: %v", err)
@@ -150,6 +151,9 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 			if !exists {
 				log.Printf("Room not found: %s", moveData.GameID)
 				continue
+			}
+			if exists {
+				room.Timer.SwitchTurn() 
 			}
 
 			// Mettre à jour l'état du jeu
@@ -242,8 +246,6 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		room.PositionFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 		room.IsWhitesTurn = true
 		room.IsGameOver = false
-		room.WhitesTime = "10"
-		room.BlacksTime = "10"
 
 		// Message de base pour les deux joueurs
 		baseGameState := map[string]interface{}{
@@ -253,13 +255,8 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 			"winnerId":          "",
 			"whitesTime":        room.WhitesTime,
 			"blacksTime":        room.BlacksTime,
-			"whitsCurrentMove":  "",
-			"blacksCurrentMove": "",
-			"boardState":        room.BoardState,
-			"playState":         string(room.Status),
 			"isWhitesTurn":      room.IsWhitesTurn,
 			"isGameOver":        room.IsGameOver,
-			"squareState":       room.SquareState,
 			"moves":             room.Moves,
 		}
 
@@ -343,6 +340,11 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		if !exists {
 			log.Printf("Room %s not found during leave", invitation.RoomID)
 			return fmt.Errorf("room not found")
+		}
+
+		// Arrêter le timer avant de fermer la room
+		if room.Timer != nil {
+			room.Timer.Stop()
 		}
 
 		// Notify the other player about room closure

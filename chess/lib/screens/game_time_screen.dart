@@ -193,6 +193,8 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
             // Bouton pour confirmer la sélection
             ElevatedButton(
               onPressed: () {
+                gameProvider.setCompturMode(value: true);
+                gameProvider.setFriendsMode(value: false);
                 gameProvider.setGameDifficulty(
                     gameDifficulty: selectedDifficulty);
                 gameProvider.setGameTime(gameTime: selectedTime);
@@ -200,7 +202,7 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
                     player: selectedColor == PlayerColor.white ? 0 : 1);
                 gameProvider.setIsloadind(value: true);
                 gameProvider.setIsGameEnd(value: false);
-                
+
                 // Naviguer vers l'écran de jeu avec le temps et la difficulté sélectionnés
                 Navigator.pushReplacement(
                   context,

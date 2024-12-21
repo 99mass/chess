@@ -9,13 +9,13 @@ class GameModel {
   String winnerId;
   String whitesTime;
   String blacksTime;
-  String whitsCurrentMove;
-  String blacksCurrentMove;
-  String boardState;
-  String playState;
+  // String whitsCurrentMove;
+  // String blacksCurrentMove;
+  // String boardState;
+  // String playState;
   bool isWhitesTurn;
   bool isGameOver;
-  int squareState;
+  // int squareState;
   List<Move> moves;
 
   GameModel({
@@ -27,13 +27,13 @@ class GameModel {
     required this.winnerId,
     required this.whitesTime,
     required this.blacksTime,
-    required this.whitsCurrentMove,
-    required this.blacksCurrentMove,
-    required this.boardState,
-    required this.playState,
+    // required this.whitsCurrentMove,
+    // required this.blacksCurrentMove,
+    // required this.boardState,
+    // required this.playState,
     required this.isWhitesTurn,
     required this.isGameOver,
-    required this.squareState,
+    // required this.squareState,
     required this.moves,
   });
 
@@ -48,13 +48,9 @@ class GameModel {
       winnerId: json['winnerId'] ?? '',
       whitesTime: json['whitesTime'] ?? ' 0',
       blacksTime: json['blacksTime'] ?? '0',
-      whitsCurrentMove: json['whitsCurrentMove'] ?? '',
-      blacksCurrentMove: json['blacksCurrentMove'] ?? '',
-      boardState: json['boardState'] ?? '',
-      playState: json['playState'] ?? '',
       isWhitesTurn: json['isWhitesTurn'] ?? true,
       isGameOver: json['isGameOver'] ?? false,
-      squareState: json['squareState'] ?? 0,
+      // squareState: json['squareState'] ?? 0,
       moves: (json['moves'] as List?)
               ?.map((move) => Move(from: move['from'], to: move['to']))
               .toList() ??

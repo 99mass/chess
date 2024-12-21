@@ -63,6 +63,9 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       if (_gameProvider.computerMode) {
         letOtherPlayerPlayFirst();
       }
+      if (_gameProvider.friendsMode && _gameProvider.gameOverByTime) {
+        _onGameEndByTime();
+      }
     });
   }
 
@@ -88,7 +91,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       bool result = await _gameProvider.makeSquaresMove(move, context: context);
 
       if (result) {
-        // _chessTimer.switchTurn();
         _gameProvider.setIsMyTurn(value: false);
         _gameProvider.setIsOpponentTurn(value: true);
 
@@ -181,6 +183,23 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         });
       }
     });
+  }
+
+  void _onGameEndByTime() {
+    try {
+      String message = '${_gameProvider.winnerName} wins!';
+      showDialogGameOver(context, message, onClose: () {
+        _gameProvider.setGameOverByTime(value: false);
+        
+        _cleanup();
+        Timer(const Duration(seconds: 2), () {});
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+        );
+      });
+    } catch (e) {
+      print('Erreur lors de l\'affichage du dialog: $e');
+    }
   }
 
   @override
@@ -280,20 +299,14 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
               ),
               body: Consumer<GameProvider>(
                   builder: (context, gameProvider, child) {
-
                 String whiteRemainingTime = getTimerToDisplay(
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
-                    isUser: gameProvider.friendsMode
-                        ? _gameProvider.isMyTurn
-                        : true);
+                    isUser: true);
                 String blackRemainingTime = getTimerToDisplay(
                     gameProvider: gameProvider,
                     chessTimer: _chessTimer,
-                    isUser: gameProvider.friendsMode
-                        ? _gameProvider.isOpponentTurn
-                        : false);
-              
+                    isUser: false);
 
                 return Center(
                   child: SingleChildScrollView(
@@ -436,7 +449,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
   String _getPlayerName({required bool isWhite}) {
     if (_gameProvider.computerMode) {
-      return isWhite ? 'You' : 'Computer';
+      return !isWhite ? 'You' : 'Computer';
     } else if (_gameProvider.friendsMode && _gameProvider.gameModel != null) {
       return isWhite
           ? _gameProvider.gameModel!.opponentUsername

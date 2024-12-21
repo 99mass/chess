@@ -26,14 +26,10 @@ type ChessGameRoom struct {
 	WinnerID          string `json:"winner_id,omitempty"`
 	WhitesTime        string `json:"whites_time"`
 	BlacksTime        string `json:"blacks_time"`
-	WhitesCurrentMove string `json:"whites_current_move"`
-	BlacksCurrentMove string `json:"blacks_current_move"`
-	BoardState        string `json:"board_state"`
-	PlayState         string `json:"play_state"`
 	IsWhitesTurn      bool   `json:"is_whites_turn"`
 	IsGameOver        bool   `json:"is_game_over"`
-	SquareState       int    `json:"square_state"`
 	Moves             []Move `json:"moves"`
+	Timer *ChessTimer
 }
 
 // You'll need to define the Move struct as well
@@ -94,12 +90,16 @@ func (rm *RoomManager) CreateRoom(invitation InvitationMessage) *ChessGameRoom {
 		// Initialize new fields
 		GameCreatorUID: invitation.FromUserID,
 		PositionFEN:    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Standard starting position
-		WhitesTime:     "0",                                                        // Initial time
-		BlacksTime:     "0",                                                        // Initial time
+		WhitesTime:     "10:00",
+		BlacksTime:     "10:00",
 		IsWhitesTurn:   true,
 		IsGameOver:     false,
 		Moves:          []Move{},
 	}
+
+	timer := NewChessTimer(room, 1)
+	room.Timer = timer 
+	timer.Start()
 
 	rm.rooms[invitation.RoomID] = room
 	return room
@@ -116,10 +116,17 @@ func (rm *RoomManager) GetRoom(roomID string) (*ChessGameRoom, bool) {
 
 // Remove a room
 func (rm *RoomManager) RemoveRoom(roomID string) {
-	rm.mutex.Lock()
-	defer rm.mutex.Unlock()
+    rm.mutex.Lock()
+    defer rm.mutex.Unlock()
 
-	delete(rm.rooms, roomID)
+    // Récupérer la room avant de la supprimer
+    if room, exists := rm.rooms[roomID]; exists {
+        // Arrêter le timer si il existe
+        if room.Timer != nil {
+            room.Timer.Stop()
+        }
+        delete(rm.rooms, roomID)
+    }
 }
 
 // Add a connection to a room
