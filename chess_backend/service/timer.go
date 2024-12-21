@@ -51,25 +51,37 @@ func (ct *ChessTimer) runTimer() {
 		select {
 		case <-ct.ticker.C:
 			ct.mutex.Lock()
+			timeoutOccurred := false
+			var winner string
+
+			// Vérifier le timeout avant de décrémenter
 			if ct.room.IsWhitesTurn {
-				ct.whiteSeconds--
-				ct.room.WhitesTime = formatTime(ct.whiteSeconds)
 				if ct.whiteSeconds <= 0 {
-					ct.handleTimeOut("black") // Les noirs gagnent
-					ct.mutex.Unlock()
-					return
+					timeoutOccurred = true
+					winner = "black"
+				} else {
+					ct.whiteSeconds--
+					ct.room.WhitesTime = formatTime(ct.whiteSeconds)
 				}
 			} else {
-				ct.blackSeconds--
-				ct.room.BlacksTime = formatTime(ct.blackSeconds)
 				if ct.blackSeconds <= 0 {
-					ct.handleTimeOut("white") // Les blancs gagnent
-					ct.mutex.Unlock()
-					return
+					timeoutOccurred = true
+					winner = "white"
+				} else {
+					ct.blackSeconds--
+					ct.room.BlacksTime = formatTime(ct.blackSeconds)
 				}
 			}
 
+			// Diffuser la mise à jour du temps
 			ct.broadcastTimeUpdate()
+
+			if timeoutOccurred {
+				ct.mutex.Unlock() // Déverrouiller avant handleTimeOut
+				ct.handleTimeOut(winner)
+				return
+			}
+
 			ct.mutex.Unlock()
 
 		case <-ct.stopChan:
@@ -79,6 +91,48 @@ func (ct *ChessTimer) runTimer() {
 	}
 }
 
+func (ct *ChessTimer) handleTimeOut(winner string) {
+	// Arrêter le timer
+	ct.Stop()
+
+	// Mettre à jour l'état du jeu
+	ct.room.mutex.Lock()
+	ct.room.IsGameOver = true
+	ct.room.Status = RoomStatusFinished
+	if winner == "white" {
+		ct.room.WinnerID = ct.room.WhitePlayer.ID
+	} else {
+		ct.room.WinnerID = ct.room.BlackPlayer.ID
+	}
+	ct.room.mutex.Unlock()
+
+	// S'assurer que le message de fin est envoyé avec une petite pause
+	time.Sleep(100 * time.Millisecond)
+
+	gameOver := map[string]interface{}{
+		"gameId":     ct.room.RoomID,
+		"winner":     winner,
+		"reason":     "timeout",
+		"whiteTime":  formatTime(ct.whiteSeconds),
+		"blackTime":  formatTime(ct.blackSeconds),
+		"winnerId":   ct.room.WinnerID,
+		"isGameOver": true,
+		"status":     string(RoomStatusFinished),
+	}
+
+	gameOverMsg := WebSocketMessage{
+		Type:    "game_over",
+		Content: string(mustJson(gameOver)),
+	}
+
+	// Vérifier que les connexions sont toujours actives avant d'envoyer
+	ct.room.mutex.RLock()
+	if len(ct.room.Connections) > 0 {
+		ct.room.BroadcastMessage(gameOverMsg)
+		fmt.Printf("Game over message broadcast successfully: %+v\n", gameOverMsg)
+	}
+	ct.room.mutex.RUnlock()
+}
 func (ct *ChessTimer) Stop() {
 	ct.mutex.Lock()
 	defer ct.mutex.Unlock()
@@ -105,43 +159,10 @@ func (ct *ChessTimer) broadcastTimeUpdate() {
 		BlackTime:    ct.blackSeconds,
 		IsWhitesTurn: ct.room.IsWhitesTurn,
 	}
-
+	fmt.Printf("Broadcasting time update: %+v\n", update)
 	message := WebSocketMessage{
 		Type:    "time_update",
 		Content: string(mustJson(update)),
-	}
-
-	ct.room.BroadcastMessage(message)
-}
-
-func (ct *ChessTimer) handleTimeOut(winner string) {
-	ct.Stop()
-
-	// Mettre à jour l'état de la partie
-	ct.room.IsGameOver = true
-	ct.room.Status = RoomStatusFinished
-
-	if winner == "white" {
-		ct.room.WinnerID = ct.room.WhitePlayer.ID
-	} else {
-		ct.room.WinnerID = ct.room.BlackPlayer.ID
-	}
-
-	// Préparer le message de fin de partie
-	gameOver := map[string]interface{}{
-		"gameId":     ct.room.RoomID,
-		"winner":     winner,
-		"reason":     "timeout",
-		"whiteTime":  formatTime(ct.whiteSeconds),
-		"blackTime":  formatTime(ct.blackSeconds),
-		"winnerId":   ct.room.WinnerID,
-		"isGameOver": true,
-		"status":     string(RoomStatusFinished),
-	}
-
-	message := WebSocketMessage{
-		Type:    "game_over",
-		Content: string(mustJson(gameOver)),
 	}
 
 	ct.room.BroadcastMessage(message)

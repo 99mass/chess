@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/utils/helper.dart';
 import 'package:squares/squares.dart';
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/invitation_model.dart';
@@ -205,14 +207,24 @@ class WebSocketService {
             gameProvider.setLastBlackTime(value: timer['blackTime']);
           }
           break;
-          case 'game_over':
+        case 'game_over':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
             print('📦📦 Received Game Over Data: $gameOverData');
-             final gameProvider =
+            final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
-                gameProvider.setGameOverByTime(value: gameOverData['isGameOver']);
-                gameProvider.setWinnerName(value: gameOverData['winner']);
+
+            if (context.mounted) {
+              String message = '${gameOverData['winner']} wins by timeout!';
+              showDialogGameOver(context, message, onClose: () {
+                gameProvider.setGameModel();
+                gameProvider.setCurrentInvitation();
+                Timer(const Duration(seconds: 2), () {});
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+                );
+              });
+            }
           }
           break;
 

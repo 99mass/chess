@@ -232,8 +232,6 @@ class GameProvider extends ChangeNotifier {
   bool _isOpponentTurn = false;
   int _lastWhiteTime = 0;
   int _lastBlackTime = 0;
-  bool _gameOverByTime = false;
-  String _winnerName = '';
 
   // Multiplayer game data
   GameModel? _gameModel;
@@ -243,8 +241,6 @@ class GameProvider extends ChangeNotifier {
   bool get isOpponentTurn => _isOpponentTurn;
   int get lastWhiteTime => _lastWhiteTime;
   int get lastBlackTime => _lastBlackTime;
-  bool get gameOverByTime => _gameOverByTime;
-  String get winnerName => _winnerName;
 
   // Existing getters...
   GameModel? get gameModel => _gameModel;
@@ -280,15 +276,6 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setGameOverByTime({required bool value}) {
-    _gameOverByTime = value;
-    notifyListeners();
-  }
-
-  void setWinnerName({required String value}) {
-    _winnerName = value;
-    notifyListeners();
-  }
 
   void setExitGame({required bool value}) {
     _exitGame = value;
@@ -357,8 +344,7 @@ class GameProvider extends ChangeNotifier {
     _gameTime = int.tryParse(_gameModel!.whitesTime) ?? 0;
 
     // Set game end status
-    _isGameEnd = _gameModel!.isGameOver; 
-    _gameOverByTime = false;
+    _isGameEnd = _gameModel!.isGameOver;
 
     notifyListeners();
   }
@@ -390,6 +376,8 @@ class GameProvider extends ChangeNotifier {
       print('Error handling opponent move: $e');
     }
   }
+
+  
 
   List<UserProfile> _onlineUsers = [];
   // ignore: prefer_final_fields

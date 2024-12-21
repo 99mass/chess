@@ -63,9 +63,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       if (_gameProvider.computerMode) {
         letOtherPlayerPlayFirst();
       }
-      if (_gameProvider.friendsMode && _gameProvider.gameOverByTime) {
-        _onGameEndByTime();
-      }
     });
   }
 
@@ -183,23 +180,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         });
       }
     });
-  }
-
-  void _onGameEndByTime() {
-    try {
-      String message = '${_gameProvider.winnerName} wins!';
-      showDialogGameOver(context, message, onClose: () {
-        _gameProvider.setGameOverByTime(value: false);
-        
-        _cleanup();
-        Timer(const Duration(seconds: 2), () {});
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-        );
-      });
-    } catch (e) {
-      print('Erreur lors de l\'affichage du dialog: $e');
-    }
   }
 
   @override
