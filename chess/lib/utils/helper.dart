@@ -35,7 +35,7 @@ void showDialogGameOver(BuildContext context, String message,
     {String? score, VoidCallback? onClose}) {
   showDialog(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     builder: (BuildContext context) {
       return AlertDialog(
         backgroundColor: Colors.amber[700],
@@ -62,6 +62,7 @@ void showDialogGameOver(BuildContext context, String message,
             child: const Text('OK',
                 style: TextStyle(fontSize: 20, color: Colors.white)),
             onPressed: () {
+               Navigator.of(context).pop(false);
               onClose?.call();
             },
           ),

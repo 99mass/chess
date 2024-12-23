@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'package:chess/constant/constants.dart';
 import 'package:chess/provider/game_provider.dart';
-import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -60,14 +59,15 @@ class ChessTimer {
   }
 
   void _handleTimeExpired(BuildContext context) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.setOnWillPop(value: true);
+    gameProvider.setFriendsMode(value: false);
+    gameProvider.setCompturMode(value: false);
     showDialogGameOver(
         context, _whiteRemainingTime == 0 ? 'Black wins!' : 'White wins!',
         onClose: () {
       stop();
       dispose();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-      );
     });
     _activeTimer?.cancel();
     onTimeExpired?.call();
@@ -80,7 +80,6 @@ class ChessTimer {
   }
 
   void dispose() {
-    print('Disposing timer');
     _activeTimer?.cancel();
     onTimeExpired?.call();
     _activeTimer = null;

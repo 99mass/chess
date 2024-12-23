@@ -53,10 +53,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       },
     );
 
-    _chessTimer.start(
-      context: context,
-      playerColor: _gameProvider.playerColor,
-    );
+    if (_gameProvider.computerMode) {
+      _chessTimer.start(
+        context: context,
+        playerColor: _gameProvider.playerColor,
+      );
+    }
 
     // Handle first move based on game mode
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -193,6 +195,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       _chessTimer.stop();
       _chessTimer.dispose();
       _timer?.cancel();
+      _gameProvider.setFriendsMode(value: false);
       if (stockfish != null) {
         stockfish!.stdin = StockfishUicCommand.stop;
         _webSocketService.disposeInvitationStream();
@@ -213,15 +216,32 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
-        bool? confirmExit = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return _ConfirmExitDialog();
-          },
-        );
+        if (!_gameProvider.onWillPop) {
+          bool? confirmExit = await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) {
+              return _ConfirmExitDialog();
+            },
+          );
 
-        if (confirmExit == true) {
+          if (confirmExit == true) {
+            _cleanup();
+
+            Timer(const Duration(seconds: 2), () {});
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MainMenuScreen(),
+              ),
+            );
+
+            return true;
+          }
+        }
+
+        if (_gameProvider.onWillPop) {
           _cleanup();
+          _gameProvider.setOnWillPop(value: false);
 
           Timer(const Duration(seconds: 2), () {});
           Navigator.pushReplacement(
@@ -257,7 +277,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                     color: Colors.black87,
                   ),
                 ),
-                automaticallyImplyLeading: false,
+                automaticallyImplyLeading: true,
                 backgroundColor: Colors.amber[700],
                 actions: [
                   IconButton(
@@ -408,7 +428,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         fromUsername: _gameProvider.user.userName,
         toUserId: _gameProvider.gameModel!.userId,
         toUsername: _gameProvider.opponentUsername,
-        timestamp: DateTime.now().millisecondsSinceEpoch,
         roomId: _gameProvider.gameModel!.gameId,
       );
 

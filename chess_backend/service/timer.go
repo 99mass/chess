@@ -129,7 +129,6 @@ func (ct *ChessTimer) handleTimeOut(winner string) {
 	ct.room.mutex.RLock()
 	if len(ct.room.Connections) > 0 {
 		ct.room.BroadcastMessage(gameOverMsg)
-		fmt.Printf("Game over message broadcast successfully: %+v\n", gameOverMsg)
 	}
 	ct.room.mutex.RUnlock()
 }
@@ -159,7 +158,6 @@ func (ct *ChessTimer) broadcastTimeUpdate() {
 		BlackTime:    ct.blackSeconds,
 		IsWhitesTurn: ct.room.IsWhitesTurn,
 	}
-	fmt.Printf("Broadcasting time update: %+v\n", update)
 	message := WebSocketMessage{
 		Type:    "time_update",
 		Content: string(mustJson(update)),

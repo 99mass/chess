@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -21,15 +20,15 @@ type ChessGameRoom struct {
 	Status      RoomStatus             `json:"status"`
 
 	// New fields added from Dart GameModel
-	GameCreatorUID    string `json:"game_creator_uid"`
-	PositionFEN       string `json:"position_fen"`
-	WinnerID          string `json:"winner_id,omitempty"`
-	WhitesTime        string `json:"whites_time"`
-	BlacksTime        string `json:"blacks_time"`
-	IsWhitesTurn      bool   `json:"is_whites_turn"`
-	IsGameOver        bool   `json:"is_game_over"`
-	Moves             []Move `json:"moves"`
-	Timer *ChessTimer
+	GameCreatorUID string `json:"game_creator_uid"`
+	PositionFEN    string `json:"position_fen"`
+	WinnerID       string `json:"winner_id,omitempty"`
+	WhitesTime     string `json:"whites_time"`
+	BlacksTime     string `json:"blacks_time"`
+	IsWhitesTurn   bool   `json:"is_whites_turn"`
+	IsGameOver     bool   `json:"is_game_over"`
+	Moves          []Move `json:"moves"`
+	Timer          *ChessTimer
 }
 
 // You'll need to define the Move struct as well
@@ -89,16 +88,16 @@ func (rm *RoomManager) CreateRoom(invitation InvitationMessage) *ChessGameRoom {
 
 		// Initialize new fields
 		GameCreatorUID: invitation.FromUserID,
-		PositionFEN:    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", // Standard starting position
-		WhitesTime:     "10:00",
-		BlacksTime:     "10:00",
+		PositionFEN:    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+		WhitesTime:     "",
+		BlacksTime:     "",
 		IsWhitesTurn:   true,
 		IsGameOver:     false,
 		Moves:          []Move{},
 	}
 
-	timer := NewChessTimer(room, 1)
-	room.Timer = timer 
+	timer := NewChessTimer(room, 10)
+	room.Timer = timer
 	timer.Start()
 
 	rm.rooms[invitation.RoomID] = room
@@ -116,24 +115,23 @@ func (rm *RoomManager) GetRoom(roomID string) (*ChessGameRoom, bool) {
 
 // Remove a room
 func (rm *RoomManager) RemoveRoom(roomID string) {
-    rm.mutex.Lock()
-    defer rm.mutex.Unlock()
+	rm.mutex.Lock()
+	defer rm.mutex.Unlock()
 
-    // Récupérer la room avant de la supprimer
-    if room, exists := rm.rooms[roomID]; exists {
-        // Arrêter le timer si il existe
-        if room.Timer != nil {
-            room.Timer.Stop()
-        }
-        delete(rm.rooms, roomID)
-    }
+	// Récupérer la room avant de la supprimer
+	if room, exists := rm.rooms[roomID]; exists {
+		// Arrêter le timer si il existe
+		if room.Timer != nil {
+			room.Timer.Stop()
+		}
+		delete(rm.rooms, roomID)
+	}
 }
 
 // Add a connection to a room
 func (room *ChessGameRoom) AddConnection(username string, conn *websocket.Conn) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
-	log.Printf("Adding connection for %s to room %s", username, room.RoomID)
 	room.Connections[username] = conn
 }
 

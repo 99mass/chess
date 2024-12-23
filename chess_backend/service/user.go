@@ -90,7 +90,6 @@ func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool,isInR
 
 func CreateUserHandler(userStore *UserStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Received create user request")
 
 		var user UserProfile
 		err := json.NewDecoder(r.Body).Decode(&user)
@@ -99,8 +98,6 @@ func CreateUserHandler(userStore *UserStore) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		log.Printf("Received username: %s", user.UserName)
 
 		user.UserName = strings.TrimSpace(user.UserName)
 		if user.UserName == "" {

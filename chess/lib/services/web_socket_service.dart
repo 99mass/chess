@@ -86,8 +86,6 @@ class WebSocketService {
     BuildContext? context,
   ) async {
     try {
-      print('🌐 Raw WebSocket Message Received: $message');
-
       final Map<String, dynamic> data = json.decode(message);
 
       switch (data['type']) {
@@ -121,6 +119,7 @@ class WebSocketService {
           if (context != null) {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
+            gameProvider.setInvitationCancel(value: false);
             gameProvider.handleInvitationRejection(context, invitation);
           }
           break;
@@ -133,17 +132,20 @@ class WebSocketService {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
             gameProvider.handleInvitationCancellation(context, invitation);
+            gameProvider.setInvitationCancel(value: true);
           }
           break;
+        // -------------Game -----------------
         case 'game_start':
           if (context != null && context.mounted) {
             final gameData = json.decode(data['content']);
-            // print('📦 Received Game Start Data: $gameData');
 
             try {
-              Provider.of<GameProvider>(context, listen: false)
-                  .initializeMultiplayerGame(gameData);
+              final gameProvider =
+                  Provider.of<GameProvider>(context, listen: false);
 
+              gameProvider.initializeMultiplayerGame(gameData);
+              gameProvider.setInvitationCancel(value: false);
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const GameBoardScreen(),
@@ -157,29 +159,40 @@ class WebSocketService {
             }
           }
           break;
+        
         case 'room_closed':
           if (context != null) {
             final Map<String, dynamic> roomData = json.decode(data['content']);
             final fromUsername = roomData['fromUsername'];
 
-            // Get the game provider
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
             if (!gameProvider.exitGame) {
               gameProvider.setExitGame(value: true);
+              gameProvider.setGameModel();
+              gameProvider.setCurrentInvitation();
+              gameProvider.setFriendsMode(value: false);
+              gameProvider.setCompturMode(value: false);
 
               Future.microtask(() {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text('$fromUsername has left the game.'),
                   ));
+                  Timer(const Duration(seconds: 2), () {});
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MainMenuScreen(),
+                    ),
+                  );
                 }
               });
             }
           }
           break;
-        // -------------Game Move
+
         case 'game_move':
           if (context != null && context.mounted) {
             final moveData = json.decode(data['content']);
@@ -198,6 +211,7 @@ class WebSocketService {
             }
           }
           break;
+        
         case 'time_update':
           if (context != null && context.mounted) {
             final timer = json.decode(data['content']);
@@ -205,25 +219,42 @@ class WebSocketService {
                 Provider.of<GameProvider>(context, listen: false);
             gameProvider.setLastWhiteTime(value: timer['whiteTime']);
             gameProvider.setLastBlackTime(value: timer['blackTime']);
+            gameProvider.setInvitationCancel(value: false);
           }
           break;
+        
         case 'game_over':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
-            print('📦📦 Received Game Over Data: $gameOverData');
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
             if (context.mounted) {
               String message = '${gameOverData['winner']} wins by timeout!';
-              showDialogGameOver(context, message, onClose: () {
-                gameProvider.setGameModel();
-                gameProvider.setCurrentInvitation();
-                Timer(const Duration(seconds: 2), () {});
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-                );
-              });
+              showDialogGameOver(context, message);
+              gameProvider.setGameModel();
+              gameProvider.setCurrentInvitation();
+              gameProvider.setFriendsMode(value: false);
+              gameProvider.setOnWillPop(value: true);
+            }
+          }
+          break;
+        
+        case 'game_over_checkmate':
+          if (context != null && context.mounted) {
+            final gameOverData = json.decode(data['content']);
+            print('📦📦 Received Game Checkmate Data: $gameOverData');
+            final gameProvider =
+                Provider.of<GameProvider>(context, listen: false);
+
+            if (context.mounted) {
+              String message = '${gameOverData['message']}';
+              showDialogGameOver(context, message,
+                  score: gameOverData['score']);
+              gameProvider.setGameModel();
+              gameProvider.setCurrentInvitation();
+              gameProvider.setFriendsMode(value: false);
+              gameProvider.setOnWillPop(value: true);
             }
           }
           break;
@@ -251,7 +282,6 @@ class WebSocketService {
       fromUsername: currentUser.userName,
       toUserId: toUser.id,
       toUsername: toUser.userName,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
     );
 
     final invitationJson = json.encode({
@@ -271,7 +301,6 @@ class WebSocketService {
       toUserId: invitation.fromUserId,
       toUsername: invitation.fromUsername,
       roomId: invitation.roomId,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
     );
 
     final acceptJson = json.encode({
@@ -290,7 +319,6 @@ class WebSocketService {
       toUserId: invitation.fromUserId,
       toUsername: invitation.fromUsername,
       roomId: invitation.roomId,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
     );
 
     final rejectJson = json.encode({
@@ -309,7 +337,6 @@ class WebSocketService {
       toUserId: invitation.toUserId,
       toUsername: invitation.toUsername,
       roomId: invitation.roomId,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
     );
 
     final cancelJson = json.encode({
@@ -340,26 +367,46 @@ class WebSocketService {
         context: context,
         barrierDismissible: false,
         builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: const Text('Game Invitation'),
-            content:
-                Text('${invitation.fromUsername} invites you to play chess'),
-            actions: [
-              TextButton(
-                child: const Text('Accept'),
-                onPressed: () {
-                  acceptInvitation(currentUser, invitation);
-                  Navigator.of(dialogContext).pop(true);
-                },
-              ),
-              TextButton(
-                child: const Text('Reject'),
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  rejectInvitation(currentUser, invitation);
-                },
-              ),
-            ],
+          return Consumer<GameProvider>(
+            builder: (context, gameProvider, child) {
+              // Vérifier si l'invitation a été annulée
+              if (gameProvider.invitationCancel) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Time out Invitation canceled!'),
+                      duration: Duration(seconds: 5),
+                    ),
+                  );
+                  if (Navigator.of(dialogContext).canPop()) {
+                    Navigator.of(dialogContext).pop();
+                  }
+                  gameProvider.setInvitationCancel(value: false);
+                });
+              }
+
+              return AlertDialog(
+                title: const Text('Game Invitation'),
+                content: Text(
+                    '${invitation.fromUsername} invites you to play chess'),
+                actions: [
+                  TextButton(
+                    child: const Text('Accept'),
+                    onPressed: () {
+                      acceptInvitation(currentUser, invitation);
+                      Navigator.of(dialogContext).pop(true);
+                    },
+                  ),
+                  TextButton(
+                    child: const Text('Reject'),
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      rejectInvitation(currentUser, invitation);
+                    },
+                  ),
+                ],
+              );
+            },
           );
         },
       );

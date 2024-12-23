@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -139,7 +140,6 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 				FEN          string      `json:"fen"`
 				IsWhitesTurn bool        `json:"isWhitesTurn"`
 			}
-			
 
 			if err := json.Unmarshal([]byte(message.Content), &moveData); err != nil {
 				log.Printf("Error parsing move data: %v", err)
@@ -153,7 +153,7 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 				continue
 			}
 			if exists {
-				room.Timer.SwitchTurn() 
+				room.Timer.SwitchTurn()
 			}
 
 			// Mettre à jour l'état du jeu
@@ -169,12 +169,58 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 					Content: message.Content,
 				}); err != nil {
 					log.Printf("Error sending move to other player: %v", err)
-				} else {
-					log.Printf("Move sent to player %s", moveData.ToUsername)
-				}
+				} 
 			} else {
 				log.Printf("Connection not found for player %s", moveData.ToUsername)
 			}
+		case "game_over_checkmate":
+			var gameOverData struct {
+				GameID  string `json:"gameId"`
+				Winner  string `json:"winner"`
+				Message string `json:"message"`
+				Score   string `json:"score"`
+			}
+
+			if err := json.Unmarshal([]byte(message.Content), &gameOverData); err != nil {
+				log.Printf("Error parsing game over data: %v", err)
+				continue
+			}
+
+			// Récupérer la room
+			room, exists := m.roomManager.GetRoom(gameOverData.GameID)
+			if !exists {
+				log.Printf("Room not found: %s", gameOverData.GameID)
+				continue
+			}
+
+			room.IsGameOver = true
+
+			gameOverMessage := WebSocketMessage{
+				Type:    "game_over_checkmate",
+				Content: message.Content,
+			}
+
+			// Envoyer aux deux joueurs
+			for username, conn := range room.Connections {
+				if err := conn.WriteJSON(gameOverMessage); err != nil {
+					log.Printf("Error sending game over notification to %s: %v", username, err)
+				}
+			}
+
+			// Arrêter le timer si nécessaire
+			if room.Timer != nil {
+				room.Timer.Stop()
+			}
+
+			//  Nettoyer la room après un délai 2 secondes
+			go func() {
+				time.Sleep(2 * time.Second)
+				m.roomManager.RemoveRoom(gameOverData.GameID)
+				for username := range room.Connections {
+					m.userStore.UpdateUserRoomStatus(username, false)
+				}
+				m.broadcastOnlineUsers()
+			}()
 
 		default:
 			log.Printf("Unhandled message type: %s", message.Type)
@@ -184,9 +230,6 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 }
 
 func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) error {
-	log.Printf("🚀 Handling Invitation")
-	log.Printf("   From: %s", invitation.FromUsername)
-	log.Printf("   To: %s", invitation.ToUsername)
 
 	m.mutex.RLock()
 	_, fromExists := m.connections[invitation.FromUsername]
@@ -249,15 +292,15 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 
 		// Message de base pour les deux joueurs
 		baseGameState := map[string]interface{}{
-			"gameId":            invitation.RoomID,
-			"gameCreatorUid":    invitation.ToUserID,
-			"positonFen":        room.PositionFEN,
-			"winnerId":          "",
-			"whitesTime":        room.WhitesTime,
-			"blacksTime":        room.BlacksTime,
-			"isWhitesTurn":      room.IsWhitesTurn,
-			"isGameOver":        room.IsGameOver,
-			"moves":             room.Moves,
+			"gameId":         invitation.RoomID,
+			"gameCreatorUid": invitation.ToUserID,
+			"positonFen":     room.PositionFEN,
+			"winnerId":       "",
+			"whitesTime":     room.WhitesTime,
+			"blacksTime":     room.BlacksTime,
+			"isWhitesTurn":   room.IsWhitesTurn,
+			"isGameOver":     room.IsGameOver,
+			"moves":          room.Moves,
 		}
 
 		// Préparer le message pour le créateur du jeu
@@ -326,12 +369,13 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 
 		// Notifier le destinataire de l'annulation
 		err := toConn.WriteJSON(WebSocketMessage{
-			Type:    "invitation_canceled",
+			Type:    "invitation_cancel",
 			Content: string(mustJson(invitation)),
 		})
 		if err != nil {
 			log.Printf("Error sending cancellation notification: %v", err)
 		}
+
 	case RoomLeave:
 		log.Printf("RoomLeave: Processing room leave for %s", invitation.FromUsername)
 
@@ -464,8 +508,6 @@ func (m *OnlineUsersManager) broadcastOnlineUsers() {
 		}
 	}
 
-	// Log pour le débogage
-	log.Printf("Broadcasting %d online users (not in room)", len(onlineUsers))
 	log.Printf("Online users: %+v", onlineUsers)
 }
 

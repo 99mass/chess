@@ -7,7 +7,6 @@ class InvitationMessage {
   final String toUserId;
   final String toUsername;
   final String? roomId;
-  final int timestamp;
 
   InvitationMessage({
     required this.type,
@@ -16,7 +15,6 @@ class InvitationMessage {
     required this.toUserId,
     required this.toUsername,
     this.roomId,
-    required this.timestamp,
   });
 
   // Méthode pour convertir en JSON
@@ -28,7 +26,6 @@ class InvitationMessage {
       'to_user_id': toUserId,
       'to_username': toUsername,
       'room_id': roomId,
-      'timestamp': timestamp,
     };
   }
 
@@ -41,7 +38,6 @@ class InvitationMessage {
       toUserId: json['to_user_id'],
       toUsername: json['to_username'],
       roomId: json['room_id'],
-      timestamp: json['timestamp'],
     );
   }
 }

@@ -1,6 +1,7 @@
 // ignore_for_file: unrelated_type_equality_checks
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:bishop/bishop.dart' as bishop;
 import 'package:chess/constant/constants.dart';
@@ -9,6 +10,7 @@ import 'package:chess/model/game_model.dart';
 import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:flutter/material.dart';
@@ -29,12 +31,17 @@ class GameProvider extends ChangeNotifier {
   PlayerColor _playerColor = PlayerColor.white;
   GameDifficulty _gameDifficulty = GameDifficulty.easy;
   int _gameTime = 0;
-  late int _whitePlayerId;
-  late int _blackPlayerId;
-  int _currentPlayerId = -1;
-
-  // user
   late UserProfile _userProfile = UserProfile(id: '', userName: '');
+  String _gameId = '';
+  String _opponentUsername = '';
+  bool _exitGame = false;
+  bool _isWhiterPlayer = false;
+  bool _isMyTurn = false;
+  bool _isOpponentTurn = false;
+  int _lastWhiteTime = 0;
+  int _lastBlackTime = 0;
+  bool _onWillPop = false;
+  bool _invitationCancel = false;
 
   // getters
   bishop.Game get game => _game;
@@ -49,11 +56,20 @@ class GameProvider extends ChangeNotifier {
   PlayerColor get playerColor => _playerColor;
   GameDifficulty get gameDifficulty => _gameDifficulty;
   int get gameTime => _gameTime;
-  int get whitePlayerId => _whitePlayerId;
-  int get blackPlayerId => _blackPlayerId;
-  int get currentPlayerId => _currentPlayerId;
-  // user
-  UserProfile get user => _userProfile;
+  UserProfile get user => _userProfile; // user
+
+  GameModel? _gameModel;
+  bool get isWhitePlayer => _isWhiterPlayer;
+  bool get isMyTurn => _isMyTurn;
+  bool get isOpponentTurn => _isOpponentTurn;
+  int get lastWhiteTime => _lastWhiteTime;
+  int get lastBlackTime => _lastBlackTime;
+  GameModel? get gameModel => _gameModel;
+  String get gameId => _gameId;
+  String get opponentUsername => _opponentUsername;
+  bool get exitGame => _exitGame;
+  bool get onWillPop => _onWillPop;
+  bool get invitationCancel => _invitationCancel;
 
   Future<void> loadUser() async {
     _userProfile = await SharedPreferencesStorage.instance.getUserLocally() ??
@@ -62,7 +78,6 @@ class GameProvider extends ChangeNotifier {
   }
 
   // setters
-  // user
   void setUser(UserProfile user) async {
     _userProfile = user;
     await SharedPreferencesStorage.instance.saveUserLocally(user);
@@ -92,7 +107,8 @@ class GameProvider extends ChangeNotifier {
       {required BuildContext context, ChessTimer? chessTimer}) async {
     bool result = game.makeSquaresMove(move);
 
-    handleGameOver(context, chessTimer: chessTimer);
+    if (_computerMode) handleGameOver(context, chessTimer: chessTimer);
+    if (_friendsMode) handleGameOverFriends();
 
     notifyListeners();
     return result;
@@ -102,7 +118,8 @@ class GameProvider extends ChangeNotifier {
       {required BuildContext context, ChessTimer? chessTimer}) async {
     bool result = game.makeMoveString(bestMove);
 
-    handleGameOver(context, chessTimer: chessTimer);
+    if (_computerMode) handleGameOver(context, chessTimer: chessTimer);
+    if (_friendsMode) handleGameOverFriends();
 
     notifyListeners();
     return result;
@@ -136,11 +153,10 @@ class GameProvider extends ChangeNotifier {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
-          showDialogGameOver(context, message, score: score, onClose: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-            );
-          });
+          _computerMode = false;
+          _friendsMode = false;
+          _onWillPop = true;
+          showDialogGameOver(context, message, score: score);
         } catch (e) {
           print('Erreur lors de l\'affichage du dialog: $e');
         }
@@ -204,50 +220,10 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setWhitePlayerId({required int playerId}) {
-    _whitePlayerId = playerId;
-    notifyListeners();
-  }
-
   void setIsGameEnd({required bool value}) {
     _isGameEnd = value;
     notifyListeners();
   }
-
-  void setBlackPlayerId({required int playerId}) {
-    _blackPlayerId = playerId;
-    notifyListeners();
-  }
-
-  void setCurrentPlayerId({required int playerId}) {
-    _currentPlayerId = playerId;
-    notifyListeners();
-  }
-
-  String _gameId = '';
-  String _opponentUsername = '';
-  bool _exitGame = false;
-  bool _isWhiterPlayer = false;
-  bool _isMyTurn = false;
-  bool _isOpponentTurn = false;
-  int _lastWhiteTime = 0;
-  int _lastBlackTime = 0;
-
-  // Multiplayer game data
-  GameModel? _gameModel;
-  bool _isFlipBoard = false;
-  bool get isWhitePlayer => _isWhiterPlayer;
-  bool get isMyTurn => _isMyTurn;
-  bool get isOpponentTurn => _isOpponentTurn;
-  int get lastWhiteTime => _lastWhiteTime;
-  int get lastBlackTime => _lastBlackTime;
-
-  // Existing getters...
-  GameModel? get gameModel => _gameModel;
-  String get gameId => _gameId;
-  String get opponentUsername => _opponentUsername;
-  bool get isFlipBoard => _isFlipBoard;
-  bool get exitGame => _exitGame;
 
   void setGameModel() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -276,17 +252,9 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-
   void setExitGame({required bool value}) {
     _exitGame = value;
     Future.microtask(() {
-      notifyListeners();
-    });
-  }
-
-  void setIsFlipBoard({required bool value}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _isFlipBoard = value;
       notifyListeners();
     });
   }
@@ -298,7 +266,6 @@ class GameProvider extends ChangeNotifier {
 
   // initialize a multiplayer game
   void initializeMultiplayerGame(Map<String, dynamic> gameData) {
-    // Parse game data into GameModel
     _gameModel = GameModel.fromJson(gameData);
     _gameId = _gameModel!.gameId;
 
@@ -320,7 +287,6 @@ class GameProvider extends ChangeNotifier {
     _player = isPlayerWhite ? Squares.white : Squares.black;
     _playerColor = isPlayerWhite ? PlayerColor.white : PlayerColor.black;
 
-    // Initialize game with FEN position
     _game = bishop.Game(
         variant: bishop.Variant.standard(), fen: _gameModel!.positonFen);
 
@@ -331,26 +297,14 @@ class GameProvider extends ChangeNotifier {
     _computerMode = false;
     _friendsMode = true;
 
-    // Set player IDs
-    _whitePlayerId = int.tryParse(_gameModel!.gameCreatorUid) ?? -1;
-    _blackPlayerId = int.tryParse(_gameModel!.userId) ?? -1;
-
-    // Determine current player based on turn and player's perspective
-    _currentPlayerId = _gameModel!.isWhitesTurn
-        ? (isPlayerWhite ? _whitePlayerId : _blackPlayerId)
-        : (isPlayerWhite ? _blackPlayerId : _whitePlayerId);
-
-    // Set game time if available
     _gameTime = int.tryParse(_gameModel!.whitesTime) ?? 0;
 
-    // Set game end status
     _isGameEnd = _gameModel!.isGameOver;
 
     notifyListeners();
   }
 
   void handleOpponentMove(Map<String, dynamic> moveData) {
-    // Vérifier si ce n'est pas notre propre mouvement
     if (moveData['fromUserId'] == user.id) {
       return;
     }
@@ -365,7 +319,6 @@ class GameProvider extends ChangeNotifier {
     }
 
     try {
-      // Mettre à jour l'état du jeu avec la nouvelle position FEN
       _game =
           bishop.Game(variant: bishop.Variant.standard(), fen: moveData['fen']);
 
@@ -377,14 +330,64 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  
+  void handleGameOverFriends() {
+    if (game.drawn || game.gameOver) {
+      _isGameEnd = true;
 
+      String message = 'Game Over!';
+      String? score;
+      String winner = '';
+
+      if (game.drawn) {
+        if (game.result == 'DrawnGameStalemate') {
+          message = 'Stalemate! The game is a draw.';
+          score = '1/2 - 1/2';
+          winner = 'Draw';
+        } else if (game.result == '1/2-1/2') {
+          message = 'Draw by agreement or insufficient material!';
+          score = '1/2 - 1/2';
+          winner = 'Draw';
+        } else {
+          message = 'The game is a draw!';
+          score = '1/2 - 1/2';
+          winner = 'Draw';
+        }
+      } else if (game.winner == Squares.white) {
+        message = 'White wins!';
+        score = '1 - 0';
+        winner = 'White';
+      } else if (game.winner == Squares.black) {
+        message = 'Black wins!';
+        score = '0 - 1';
+        winner = 'Black';
+      }
+
+      // Envoyer le message WebSocket pour notifier la fin de partie
+      if (_gameModel != null) {
+        final gameOverMessage = {
+          'type': 'game_over_checkmate',
+          'content': json.encode({
+            'gameId': _gameModel!.gameId,
+            'winner': winner,
+            'message': message,
+            'score': score,
+          }),
+        };
+
+        // Envoyer via WebSocket
+        WebSocketService().sendMessage(json.encode(gameOverMessage));
+      }
+    }
+  }
+
+  void setOnWillPop({required bool value}) => _onWillPop = value;
+
+// Online users and invitations
   List<UserProfile> _onlineUsers = [];
   // ignore: prefer_final_fields
   List<InvitationMessage> _invitations = [];
   InvitationMessage? _currentInvitation;
 
-  // Streams for online users and invitations
   final StreamController<List<UserProfile>> _onlineUsersController =
       StreamController<List<UserProfile>>.broadcast();
   final StreamController<List<InvitationMessage>> _invitationsController =
@@ -398,16 +401,13 @@ class GameProvider extends ChangeNotifier {
       _invitationsController.stream;
   InvitationMessage? get currentInvitation => _currentInvitation;
 
-  // Method to update online users
   void updateOnlineUsers(List<UserProfile> users) {
     _onlineUsers = users.toSet().toList();
     _onlineUsersController.add(_onlineUsers);
     notifyListeners();
   }
 
-  // Method to add a new invitation
   void addInvitation(InvitationMessage invitation) {
-    // Prevent duplicate invitations
     if (!_invitations.any((inv) =>
         inv.fromUserId == invitation.fromUserId &&
         inv.toUserId == invitation.toUserId)) {
@@ -417,7 +417,6 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  // Method to remove an invitation
   void removeInvitation(InvitationMessage invitation) {
     _invitations.removeWhere((inv) =>
         inv.fromUserId == invitation.fromUserId &&
@@ -426,7 +425,6 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Method to clear all invitations
   void clearInvitations() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _invitations.clear();
@@ -445,7 +443,6 @@ class GameProvider extends ChangeNotifier {
       fromUsername: fromUser.userName,
       toUserId: toUser.id,
       toUsername: toUser.userName,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
     );
 
     setOpponentUsername(username: toUser.userName);
@@ -465,16 +462,9 @@ class GameProvider extends ChangeNotifier {
     });
   }
 
-  void updateCurrentInvitation(InvitationMessage invitation) {
-    _currentInvitation = invitation;
-    notifyListeners();
-  }
-
-  // Method to handle invitation rejection
   void handleInvitationRejection(
       BuildContext context, InvitationMessage invitation) {
     removeInvitation(invitation);
-    // Additional logic for handling rejection can be added here
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${invitation.fromUsername} rejected your invitation'),
@@ -489,17 +479,9 @@ class GameProvider extends ChangeNotifier {
         ));
   }
 
-  // Method to handle invitation cancellation
   void handleInvitationCancellation(
       BuildContext context, InvitationMessage invitation) {
     removeInvitation(invitation);
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${invitation.toUsername} canceled the invitation'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
   }
 
   void handleInvitationAccepted(
@@ -512,7 +494,11 @@ class GameProvider extends ChangeNotifier {
     );
   }
 
-  // Dispose method to close streams
+  void setInvitationCancel({required bool value}) {
+    _invitationCancel = value;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _onlineUsersController.close();

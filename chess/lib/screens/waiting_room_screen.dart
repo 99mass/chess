@@ -22,6 +22,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
   late AnimationController _controller;
   late WebSocketService _webSocketService;
   late InvitationMessage? invitation;
+  Timer? _timeoutTimer;
 
   @override
   void initState() {
@@ -42,12 +43,53 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     // Initialize WebSocket connection
     _webSocketService = WebSocketService();
     _webSocketService.connectWebSocket(context);
+
+    // Start timeout timer
+    _timeoutTimer = Timer(const Duration(seconds: 10), _handleTimeout);
+  }
+
+  void _handleTimeout() {
+    if (mounted) {
+      final gameProvider = context.read<GameProvider>();
+      if (invitation != null && gameProvider.gameModel == null) {
+        // Cancel invitation
+        _webSocketService.sendInvitationCancel(invitation!);
+      }
+
+      if (gameProvider.gameModel == null) {
+        // Show timeout message and navigate to main menu
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Request Timeout'),
+            content: const Text(
+                'The invitation request has timed out. Please try again.'),
+            actions: [
+              TextButton(
+                child: const Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MainMenuScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _webSocketService.disposeInvitationStream();
+    _timeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -69,6 +111,8 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
               if (invitation != null) {
                 _webSocketService.sendInvitationCancel(invitation!);
               }
+
+              _timeoutTimer?.cancel(); // Cancel the timeout timer
 
               Timer(const Duration(seconds: 1), () {
                 Navigator.pushReplacement(

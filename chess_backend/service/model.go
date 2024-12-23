@@ -60,5 +60,4 @@ type InvitationMessage struct {
 	ToUserID     string                `json:"to_user_id"`
 	ToUsername   string                `json:"to_username"`
 	RoomID       string                `json:"room_id,omitempty"`
-	Timestamp    int64                 `json:"timestamp"`
 }

@@ -43,6 +43,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       _gameProvider.setExitGame(value: false);
     }
 
+    _gameProvider.setCompturMode(value: false);
+    _gameProvider.setFriendsMode(value: false);
+    _gameProvider.setGameModel();
+    _gameProvider.setCurrentInvitation();
+
     // Gérer les invitations
     _gameProvider.invitationsStream.listen((invitations) {
       if (invitations.isNotEmpty) {
@@ -56,10 +61,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     });
 
     // Gérer les utilisateurs en ligne
-    _gameProvider.onlineUsersStream.listen((users) {
-      print('Utilisateurs en ligne : ${users.length}');
-      // Vous pouvez ajouter une logique supplémentaire si nécessaire
-    });
+    _gameProvider.onlineUsersStream.listen((users) {});
   }
 
   void _forceWebSocketConnection() async {
@@ -72,8 +74,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
     while (_connectionAttempts < _maxConnectionAttempts) {
       try {
-        print(
-            'Tentative de connexion WebSocket (Tentative ${_connectionAttempts + 1})');
+        // print(
+        //     'Tentative de connexion WebSocket (Tentative ${_connectionAttempts + 1})');
 
         await _webSocketService.connectWebSocket(context);
 

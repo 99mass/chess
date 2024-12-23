@@ -28,6 +28,34 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
   // Définir les options de couleurs de pions
   final List<PlayerColor> colorOptions = [PlayerColor.white, PlayerColor.black];
   PlayerColor selectedColor = PlayerColor.white; // Valeur par défaut
+  bool isLoading = false;
+
+  void _startGame(GameProvider gameProvider) async {
+    setState(() {
+      isLoading = true;
+    });
+
+    gameProvider.setCompturMode(value: true);
+    gameProvider.setFriendsMode(value: false);
+    gameProvider.setGameDifficulty(gameDifficulty: selectedDifficulty);
+    gameProvider.setGameTime(gameTime: selectedTime);
+    gameProvider.setPlayerColor(
+        player: selectedColor == PlayerColor.white ? 0 : 1);
+    gameProvider.setIsloadind(value: true);
+    gameProvider.setIsGameEnd(value: false);
+
+    // Ajout d'un délai artificiel pour voir le spinner
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const GameBoardScreen(),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -190,27 +218,8 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
             ),
             const SizedBox(height: 30),
 
-            // Bouton pour confirmer la sélection
             ElevatedButton(
-              onPressed: () {
-                gameProvider.setCompturMode(value: true);
-                gameProvider.setFriendsMode(value: false);
-                gameProvider.setGameDifficulty(
-                    gameDifficulty: selectedDifficulty);
-                gameProvider.setGameTime(gameTime: selectedTime);
-                gameProvider.setPlayerColor(
-                    player: selectedColor == PlayerColor.white ? 0 : 1);
-                gameProvider.setIsloadind(value: true);
-                gameProvider.setIsGameEnd(value: false);
-
-                // Naviguer vers l'écran de jeu avec le temps et la difficulté sélectionnés
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const GameBoardScreen(),
-                  ),
-                );
-              },
+              onPressed: isLoading ? null : () => _startGame(gameProvider),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber[600],
                 foregroundColor: Colors.black87,
@@ -220,14 +229,63 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
                 ),
                 elevation: 5,
               ),
-              child: const Text(
-                'Start Game',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.black87),
+                      ),
+                    )
+                  : const Text(
+                      'Start Game',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
+
+            // Bouton pour confirmer la sélection
+            // ElevatedButton(
+            //   onPressed: () {
+            //     gameProvider.setCompturMode(value: true);
+            //     gameProvider.setFriendsMode(value: false);
+            //     gameProvider.setGameDifficulty(
+            //         gameDifficulty: selectedDifficulty);
+            //     gameProvider.setGameTime(gameTime: selectedTime);
+            //     gameProvider.setPlayerColor(
+            //         player: selectedColor == PlayerColor.white ? 0 : 1);
+            //     gameProvider.setIsloadind(value: true);
+            //     gameProvider.setIsGameEnd(value: false);
+
+            //     // Naviguer vers l'écran de jeu avec le temps et la difficulté sélectionnés
+            //     Navigator.pushReplacement(
+            //       context,
+            //       MaterialPageRoute(
+            //         builder: (context) => const GameBoardScreen(),
+            //       ),
+            //     );
+            //   },
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: Colors.amber[600],
+            //     foregroundColor: Colors.black87,
+            //     minimumSize: const Size(250, 60),
+            //     shape: RoundedRectangleBorder(
+            //       borderRadius: BorderRadius.circular(15),
+            //     ),
+            //     elevation: 5,
+            //   ),
+            //   child: const Text(
+            //     'Start Game',
+            //     style: TextStyle(
+            //       fontSize: 20,
+            //       fontWeight: FontWeight.bold,
+            //     ),
+            //   ),
+            // ),
           ],
         ),
       ),

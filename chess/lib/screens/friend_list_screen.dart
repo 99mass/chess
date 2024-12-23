@@ -35,9 +35,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
     });
 
     // Listen to online users stream
-    _gameProvider.onlineUsersStream.listen((users) {
-      print('Utilisateurs en ligne : ${users.length}');
-    });
+    _gameProvider.onlineUsersStream.listen((users) { });
 
     // Handle invitations
     _gameProvider.invitationsStream.listen((invitations) {
