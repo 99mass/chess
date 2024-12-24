@@ -119,7 +119,8 @@ class WebSocketService {
           if (context != null) {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
-            gameProvider.setInvitationCancel(value: false);
+            gameProvider.setInvitationCancel(value: true);
+            gameProvider.removeInvitation(invitation);
             gameProvider.handleInvitationRejection(context, invitation);
           }
           break;
@@ -159,7 +160,7 @@ class WebSocketService {
             }
           }
           break;
-        
+
         case 'room_closed':
           if (context != null) {
             final Map<String, dynamic> roomData = json.decode(data['content']);
@@ -211,7 +212,7 @@ class WebSocketService {
             }
           }
           break;
-        
+
         case 'time_update':
           if (context != null && context.mounted) {
             final timer = json.decode(data['content']);
@@ -222,7 +223,7 @@ class WebSocketService {
             gameProvider.setInvitationCancel(value: false);
           }
           break;
-        
+
         case 'game_over':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
@@ -232,14 +233,13 @@ class WebSocketService {
             if (context.mounted) {
               String message = '${gameOverData['winner']} wins by timeout!';
               showDialogGameOver(context, message);
-              gameProvider.setGameModel();
               gameProvider.setCurrentInvitation();
               gameProvider.setFriendsMode(value: false);
               gameProvider.setOnWillPop(value: true);
             }
           }
           break;
-        
+
         case 'game_over_checkmate':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
@@ -251,7 +251,6 @@ class WebSocketService {
               String message = '${gameOverData['message']}';
               showDialogGameOver(context, message,
                   score: gameOverData['score']);
-              gameProvider.setGameModel();
               gameProvider.setCurrentInvitation();
               gameProvider.setFriendsMode(value: false);
               gameProvider.setOnWillPop(value: true);
@@ -290,6 +289,9 @@ class WebSocketService {
     });
 
     sendMessage(invitationJson);
+
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.removeInvitation(invitation);
     print('✅ Invitation Sent Successfully');
   }
 
@@ -311,7 +313,8 @@ class WebSocketService {
     sendMessage(acceptJson);
   }
 
-  void rejectInvitation(UserProfile currentUser, InvitationMessage invitation) {
+  void rejectInvitation(BuildContext context, UserProfile currentUser,
+      InvitationMessage invitation) {
     final rejectMessage = InvitationMessage(
       type: 'invitation_reject',
       fromUserId: currentUser.id,
@@ -327,6 +330,8 @@ class WebSocketService {
     });
 
     sendMessage(rejectJson);
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.setInvitationCancel(value: false);
   }
 
   void sendInvitationCancel(InvitationMessage invitation) {
@@ -350,6 +355,8 @@ class WebSocketService {
   // Méthode pour gérer les invitations avec des interactions UI
   void handleInvitationInteraction(BuildContext context,
       UserProfile currentUser, InvitationMessage invitation) {
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.setInvitationCancel(value: false);
     switch (invitation.type) {
       case 'invitation_send':
         _showInvitationDialog(context, currentUser, invitation);
@@ -372,6 +379,9 @@ class WebSocketService {
               // Vérifier si l'invitation a été annulée
               if (gameProvider.invitationCancel) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                  gameProvider.removeInvitation(invitation);
+                  gameProvider.setInvitationCancel(value: false);
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Time out Invitation canceled!'),
@@ -381,7 +391,6 @@ class WebSocketService {
                   if (Navigator.of(dialogContext).canPop()) {
                     Navigator.of(dialogContext).pop();
                   }
-                  gameProvider.setInvitationCancel(value: false);
                 });
               }
 
@@ -394,14 +403,17 @@ class WebSocketService {
                     child: const Text('Accept'),
                     onPressed: () {
                       acceptInvitation(currentUser, invitation);
+                      gameProvider.setInvitationCancel(value: false);
                       Navigator.of(dialogContext).pop(true);
                     },
                   ),
                   TextButton(
                     child: const Text('Reject'),
                     onPressed: () {
+                      gameProvider.setInvitationCancel(value: false);
                       Navigator.of(dialogContext).pop();
-                      rejectInvitation(currentUser, invitation);
+                      rejectInvitation(context, currentUser, invitation);
+                      gameProvider.removeInvitation(invitation);
                     },
                   ),
                 ],

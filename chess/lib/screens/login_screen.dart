@@ -16,51 +16,76 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final userName = TextEditingController();
+
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.red.shade400,
+      ),
+    );
+  }
+
+  String? _validateInputs() {
+    if (userName.text.isEmpty) {
+      return 'Please enter your username';
+    }
+    if (userName.text.length > 10 || userName.text.length < 3) {
+      return 'Username must be between 3 and 10 characters';
+    }
+    if (userName.text.contains(RegExp(r'[^\x00-\x7F]'))) {
+      return 'Username cannot contain emojis';
+    }
+    return null;
+  }
+
+
   Future<void> _login() async {
-    if (_formKey.currentState?.validate() ?? false) {
+    final errorMessage = _validateInputs();
+    if (errorMessage != null) {
+      _showError(errorMessage);
+      return;
+    }
+
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      UserProfile? user = await UserService.getUserByUsername(userName.text);
+
       try {
-        setState(() {
-          _isLoading = true;
-        });
+        user = await UserService.createUser(userName.text);
 
-        UserProfile? user = await UserService.getUserByUsername(userName.text);
+        await SharedPreferencesStorage.instance.saveUserLocally(user);
+        Provider.of<GameProvider>(context, listen: false).setUser(user);
 
-        // If the user does not exist, create a new user
-        user ??= await UserService.createUser(userName.text);
-
-        if (user != null) {
-          await SharedPreferencesStorage.instance.saveUserLocally(user);
-
-          Provider.of<GameProvider>(context, listen: false).setUser(user);
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MainMenuScreen(),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Unable to create or find user'),
-            ),
-          );
-        }
-      } catch (e) {
-        print('Connection error: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to connect, check your network.'),
-          ),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainMenuScreen()),
         );
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
+      } on AuthException catch (e) {
+        String message;
+        if (e.statusCode == 409) {
+          message = 'User already has an active session';
+        } else if (e.statusCode == 400) {
+          message = 'Invalid username or password format';
+        } else {
+          message = 'Authentication failed: ${e.message}';
+        }
+        _showError(message);
       }
+    } catch (e) {
+      print('Connection error: $e');
+      _showError('Unable to connect, check your network.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -88,17 +113,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: CustomTextField(
                     controller: userName,
                     hintText: 'Enter your username',
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your username';
-                      }
-
-                      if (value.length > 10 || value.length < 3) {
-                        return 'Username must be between 3 and 10 characters';
-                      }
-
-                      return null;
-                    },
                   ),
                 ),
                 const SizedBox(height: 16.0),

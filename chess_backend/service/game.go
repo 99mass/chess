@@ -2,19 +2,18 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 // New type for Chess Game Room
 type ChessGameRoom struct {
-	RoomID      string                     `json:"room_id"`
-	WhitePlayer OnlineUser                 `json:"white_player"`
-	BlackPlayer OnlineUser                 `json:"black_player"`
-	CreatedAt   time.Time                  `json:"created_at"`
-	Connections map[string]*websocket.Conn `json:"-"`
+	RoomID      string     `json:"room_id"`
+	WhitePlayer OnlineUser `json:"white_player"`
+	BlackPlayer OnlineUser `json:"black_player"`
+	CreatedAt   time.Time  `json:"created_at"`
+	Connections map[string]*SafeConn `json:"-"`
 	mutex       sync.RWMutex
 	GameState   map[string]interface{} `json:"game_state,omitempty"`
 	Status      RoomStatus             `json:"status"`
@@ -81,8 +80,8 @@ func (rm *RoomManager) CreateRoom(invitation InvitationMessage) *ChessGameRoom {
 			ID:       invitation.ToUserID,
 			Username: invitation.ToUsername,
 		},
-		CreatedAt:   time.Now(),
-		Connections: make(map[string]*websocket.Conn),
+		CreatedAt: time.Now(),
+		Connections: make(map[string]*SafeConn),
 		Status:      RoomStatusPending,
 		GameState:   make(map[string]interface{}),
 
@@ -129,7 +128,8 @@ func (rm *RoomManager) RemoveRoom(roomID string) {
 }
 
 // Add a connection to a room
-func (room *ChessGameRoom) AddConnection(username string, conn *websocket.Conn) {
+
+func (room *ChessGameRoom) AddConnection(username string, conn *SafeConn) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 	room.Connections[username] = conn
@@ -205,12 +205,18 @@ func (m *OnlineUsersManager) RemoveUserFromRoom(username string) ([]OnlineUser, 
 	return m.getCurrentOnlineUsers(), nil
 }
 
-// Broadcast message to all players in the room
 func (room *ChessGameRoom) BroadcastMessage(message WebSocketMessage) {
 	room.mutex.RLock()
-	defer room.mutex.RUnlock()
+	connections := make(map[string]*SafeConn)
+	for username, conn := range room.Connections {
+		connections[username] = conn
+	}
+	room.mutex.RUnlock()
 
-	for _, conn := range room.Connections {
-		conn.WriteJSON(message)
+	for _, conn := range connections {
+		err := conn.WriteJSON(message)
+		if err != nil {
+			log.Printf("Error broadcasting message: %v", err)
+		}
 	}
 }

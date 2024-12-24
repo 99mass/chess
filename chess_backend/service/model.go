@@ -8,7 +8,7 @@ import (
 
 type UserProfile struct {
 	ID       string `json:"id"`
-	UserName string `json:"username"`
+	UserName string `json:"username"`               
 	IsOnline bool   `json:"isnOline"`
 	IsInRoom   bool   `json:"isInRoom"`
 }
@@ -32,9 +32,24 @@ type WebSocketMessage struct {
 // Structure de gestion des connexions WebSocket
 type OnlineUsersManager struct {
 	mutex       sync.RWMutex
-	connections map[string]*websocket.Conn
+	connections map[string]*SafeConn
 	userStore   *UserStore
 	roomManager *RoomManager
+}
+
+type SafeConn struct {
+    conn  *websocket.Conn
+    mutex sync.Mutex
+}
+
+func NewSafeConn(conn *websocket.Conn) *SafeConn {
+    return &SafeConn{conn: conn}
+}
+
+func (sc *SafeConn) WriteJSON(v interface{}) error {
+    sc.mutex.Lock()
+    defer sc.mutex.Unlock()
+    return sc.conn.WriteJSON(v)
 }
 
 type OnlineUser struct {

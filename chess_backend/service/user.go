@@ -8,44 +8,83 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 func NewUserStore() *UserStore {
 	return &UserStore{
 		Users: make(map[string]UserProfile),
+		mutex: sync.RWMutex{},
 	}
 }
 
 func (us *UserStore) Load() error {
 	filename := filepath.Join("users", "users.json")
 
-	// Check file existence outside the mutex
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		// If file doesn't exist, save initial empty store
+	// Vérifier si le dossier existe
+	if err := os.MkdirAll("users", 0755); err != nil {
+		return fmt.Errorf("failed to create users directory: %v", err)
+	}
+
+	// Vérifier si le fichier existe
+	_, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		// Si le fichier n'existe pas, créer un nouveau fichier vide
+		us.Users = make(map[string]UserProfile)
 		return us.Save()
 	}
 
-	us.mutex.Lock()
-	defer us.mutex.Unlock()
-
+	// Le fichier existe, essayons de le lire
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read users file: %v", err)
 	}
 
-	return json.Unmarshal(data, us)
+	// Si le fichier est vide, initialiser avec une map vide
+	if len(data) == 0 {
+		us.Users = make(map[string]UserProfile)
+		return us.Save()
+	}
+
+	// Essayer de décoder le JSON
+	var tempStore struct {
+		Users map[string]UserProfile `json:"users"`
+	}
+
+	if err := json.Unmarshal(data, &tempStore); err != nil {
+		// Si le fichier est corrompu, créer une nouvelle structure
+		log.Printf("Warning: corrupted users.json file, creating new one: %v", err)
+		us.Users = make(map[string]UserProfile)
+		return us.Save()
+	}
+
+	us.Users = tempStore.Users
+	return nil
 }
 
 func (us *UserStore) Save() error {
-	os.MkdirAll("users", os.ModePerm)
-
 	filename := filepath.Join("users", "users.json")
-	data, err := json.MarshalIndent(us, "", "  ")
-	if err != nil {
-		return err
+
+	// Créer la structure à sauvegarder
+	tempStore := struct {
+		Users map[string]UserProfile `json:"users"`
+	}{
+		Users: us.Users,
 	}
 
-	return os.WriteFile(filename, data, 0644)
+	// Encoder en JSON avec indentation
+	data, err := json.MarshalIndent(tempStore, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal users: %v", err)
+	}
+
+	// Écrire dans le fichier
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write users file: %v", err)
+	}
+
+	return nil
 }
 
 func (us *UserStore) CreateUser(user UserProfile) error {
@@ -53,10 +92,13 @@ func (us *UserStore) CreateUser(user UserProfile) error {
 	defer us.mutex.Unlock()
 
 	if _, exists := us.Users[user.UserName]; exists {
-		return fmt.Errorf("username already exists")
+
+		us.Users[user.UserName] = user
+	} else {
+
+		us.Users[user.UserName] = user
 	}
 
-	us.Users[user.UserName] = user
 	return us.Save()
 }
 
@@ -72,7 +114,7 @@ func (us *UserStore) GetUser(username string) (*UserProfile, error) {
 	return &user, nil
 }
 
-func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool,isInRoom bool) error {
+func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool, isInRoom bool) error {
 	us.mutex.Lock()
 	defer us.mutex.Unlock()
 
@@ -82,7 +124,7 @@ func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool,isInR
 	}
 
 	user.IsOnline = isOnline
-	user.IsInRoom=isInRoom
+	user.IsInRoom = isInRoom
 	us.Users[username] = user
 
 	return us.Save()
@@ -90,36 +132,45 @@ func (us *UserStore) UpdateUserOnlineStatus(username string, isOnline bool,isInR
 
 func CreateUserHandler(userStore *UserStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var userInput struct {
+			UserName string `json:"username"`
+		}
 
-		var user UserProfile
-		err := json.NewDecoder(r.Body).Decode(&user)
-		if err != nil {
-			log.Printf("Decode error: %v", err)
+		if err := json.NewDecoder(r.Body).Decode(&userInput); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		user.UserName = strings.TrimSpace(user.UserName)
-		if user.UserName == "" {
-			log.Println("Empty username")
-			http.Error(w, "Username cannot be empty", http.StatusBadRequest)
+		userInput.UserName = strings.TrimSpace(userInput.UserName)
+		if userInput.UserName == "" {
+			http.Error(w, "Username and password required", http.StatusBadRequest)
 			return
 		}
 
-		// Générer un ID unique
-		user.ID = GenerateUniqueID()
+		_, err := userStore.GetUser(userInput.UserName)
+		if err == nil {
 
-		log.Printf("Creating user: %+v", user)
+			http.Error(w, "User already has an active session", http.StatusConflict)
+			return
 
-		if err := userStore.CreateUser(user); err != nil {
-			log.Printf("Create user error: %v", err)
+		}
+
+		// Créer nouvel utilisateur...
+
+		newUser := UserProfile{
+			ID:       GenerateUniqueID(),
+			UserName: userInput.UserName,
+			IsOnline: false,
+			IsInRoom: false,
+		}
+
+		if err := userStore.CreateUser(newUser); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Répondre avec le profil utilisateur
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		json.NewEncoder(w).Encode(newUser)
 	}
 }
 
@@ -132,15 +183,28 @@ func GetUserHandler(userStore *UserStore) http.HandlerFunc {
 			return
 		}
 
+		// Créer une version de la réponse sans le mot de passe
+		response := struct {
+			ID       string `json:"id"`
+			UserName string `json:"username"`
+			IsOnline bool   `json:"isOnline"`
+			IsInRoom bool   `json:"isInRoom"`
+		}{
+			ID:       user.ID,
+			UserName: user.UserName,
+			IsOnline: user.IsOnline,
+			IsInRoom: user.IsInRoom,
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		json.NewEncoder(w).Encode(response)
 	}
 }
 
 func SetupUserStore() *UserStore {
 	userStore := NewUserStore()
 	if err := userStore.Load(); err != nil {
-		panic(err)
+		log.Printf("Warning: Error loading user store: %v", err)
 	}
 	return userStore
 }

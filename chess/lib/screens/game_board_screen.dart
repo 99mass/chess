@@ -242,6 +242,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         if (_gameProvider.onWillPop) {
           _cleanup();
           _gameProvider.setOnWillPop(value: false);
+          _gameProvider.setGameModel();
 
           Timer(const Duration(seconds: 2), () {});
           Navigator.pushReplacement(
@@ -449,12 +450,10 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   String _getPlayerName({required bool isWhite}) {
     if (_gameProvider.computerMode) {
       return !isWhite ? 'You' : 'Computer';
-    } else if (_gameProvider.friendsMode && _gameProvider.gameModel != null) {
-      return isWhite
-          ? _gameProvider.gameModel!.opponentUsername
-          : _gameProvider.user.userName;
-    }
-    return isWhite ? 'Player 1' : 'Player 2';
+    } 
+    return isWhite
+        ? _gameProvider.gameModel?.opponentUsername ?? ''
+        : _gameProvider.user.userName;
   }
 
   Widget _buildUserTile(

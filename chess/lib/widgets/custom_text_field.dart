@@ -3,14 +3,10 @@ import 'package:flutter/material.dart';
 class CustomTextField extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
-  final bool obscureText;
-  final FormFieldValidator<String>? validator;
 
   const CustomTextField({
     required this.controller,
     required this.hintText,
-    this.obscureText = false,
-    this.validator,
     super.key,
   });
 
@@ -20,8 +16,6 @@ class CustomTextField extends StatelessWidget {
       cursorColor: Colors.black87,
       style: const TextStyle(color: Colors.white),
       controller: controller,
-      obscureText: obscureText,
-      validator: validator,
       decoration: InputDecoration(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),

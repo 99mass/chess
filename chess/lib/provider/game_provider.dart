@@ -408,13 +408,16 @@ class GameProvider extends ChangeNotifier {
   }
 
   void addInvitation(InvitationMessage invitation) {
-    if (!_invitations.any((inv) =>
-        inv.fromUserId == invitation.fromUserId &&
-        inv.toUserId == invitation.toUserId)) {
-      _invitations.add(invitation);
-      _invitationsController.add(_invitations);
-      notifyListeners();
-    }
+    // Supprimer d'abord toute invitation existante du même utilisateur
+    _invitations.removeWhere((inv) =>
+        inv.fromUserId == invitation.fromUserId ||
+        inv.toUserId == invitation.fromUserId);
+
+    // Ajouter la nouvelle invitation
+    _invitations.add(invitation);
+    _invitationsController.add(_invitations);
+    setInvitationCancel(value: false);
+    notifyListeners();
   }
 
   void removeInvitation(InvitationMessage invitation) {
@@ -422,6 +425,7 @@ class GameProvider extends ChangeNotifier {
         inv.fromUserId == invitation.fromUserId &&
         inv.toUserId == invitation.toUserId);
     _invitationsController.add(_invitations);
+    setInvitationCancel(value: false);
     notifyListeners();
   }
 
@@ -429,6 +433,8 @@ class GameProvider extends ChangeNotifier {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _invitations.clear();
       _invitationsController.add(_invitations);
+      setInvitationCancel(value: false);
+      _currentInvitation = null;
       notifyListeners();
     });
   }
@@ -465,6 +471,8 @@ class GameProvider extends ChangeNotifier {
   void handleInvitationRejection(
       BuildContext context, InvitationMessage invitation) {
     removeInvitation(invitation);
+    clearInvitations();
+    setInvitationCancel(value: false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${invitation.fromUsername} rejected your invitation'),
@@ -472,7 +480,7 @@ class GameProvider extends ChangeNotifier {
       ),
     );
     Timer(const Duration(seconds: 2), () {});
-    Navigator.push(
+    Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => const MainMenuScreen(),

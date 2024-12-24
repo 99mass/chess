@@ -28,6 +28,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
   void initState() {
     super.initState();
 
+    _cancelTimer();
     // Initialize animation controller
     _controller = AnimationController(
       duration: const Duration(seconds: 2),
@@ -45,18 +46,20 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     _webSocketService.connectWebSocket(context);
 
     // Start timeout timer
-    _timeoutTimer = Timer(const Duration(seconds: 10), _handleTimeout);
+    _timeoutTimer = Timer(const Duration(seconds: 30), _handleTimeout);
   }
 
   void _handleTimeout() {
     if (mounted) {
+      _cancelTimer();
+
       final gameProvider = context.read<GameProvider>();
       if (invitation != null && gameProvider.gameModel == null) {
         // Cancel invitation
         _webSocketService.sendInvitationCancel(invitation!);
       }
 
-      if (gameProvider.gameModel == null) {
+      if (gameProvider.gameModel == null && !gameProvider.invitationCancel) {
         // Show timeout message and navigate to main menu
         showDialog(
           context: context,
@@ -69,6 +72,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
               TextButton(
                 child: const Text('OK'),
                 onPressed: () {
+                   _cancelTimer();
                   Navigator.of(context).pop();
                   Navigator.pushReplacement(
                     context,
@@ -85,8 +89,16 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     }
   }
 
+   void _cancelTimer() {
+    if (_timeoutTimer != null) {
+      _timeoutTimer!.cancel();
+      _timeoutTimer = null;
+    }
+  }
+
   @override
   void dispose() {
+   _cancelTimer();
     _controller.dispose();
     _webSocketService.disposeInvitationStream();
     _timeoutTimer?.cancel();
@@ -94,6 +106,8 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
   }
 
   Future<bool> _onWillPop() async {
+    _cancelTimer();
+
     // Show confirmation dialog
     bool? shouldExit = await showDialog<bool>(
       context: context,
@@ -112,7 +126,10 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
                 _webSocketService.sendInvitationCancel(invitation!);
               }
 
+              _cancelTimer();
+
               _timeoutTimer?.cancel(); // Cancel the timeout timer
+              _timeoutTimer = null;
 
               Timer(const Duration(seconds: 1), () {
                 Navigator.pushReplacement(

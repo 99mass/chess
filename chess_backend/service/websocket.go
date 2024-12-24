@@ -13,14 +13,14 @@ import (
 // Configuration du WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // À personnaliser selon vos besoins de sécurité
+		return true 
 	},
 }
 
 // Créer un nouveau gestionnaire de connexions
 func NewOnlineUsersManager(userStore *UserStore) *OnlineUsersManager {
 	return &OnlineUsersManager{
-		connections: make(map[string]*websocket.Conn),
+		connections: make(map[string]*SafeConn),
 		userStore:   userStore,
 		roomManager: NewRoomManager(),
 	}
@@ -49,9 +49,13 @@ func (m *OnlineUsersManager) HandleConnection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	safeConn := NewSafeConn(conn)
+	
+
 	// Ajouter la connexion
 	m.mutex.Lock()
-	m.connections[username] = conn
+	// m.connections[username] = conn
+	m.connections[username] = safeConn
 	m.mutex.Unlock()
 
 	// Mettre à jour le statut en ligne
@@ -169,7 +173,7 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 					Content: message.Content,
 				}); err != nil {
 					log.Printf("Error sending move to other player: %v", err)
-				} 
+				}
 			} else {
 				log.Printf("Connection not found for player %s", moveData.ToUsername)
 			}
@@ -260,7 +264,6 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 				log.Printf("❌ Error Sending Invitation: %v", err)
 				return err
 			}
-			log.Printf("✅ Invitation Sent Successfully to %s", invitation.ToUsername)
 		} else {
 			log.Printf("❌ Recipient %s not connected", invitation.ToUsername)
 		}
@@ -464,62 +467,53 @@ func (m *OnlineUsersManager) notifyRoomClosure(invitation InvitationMessage) {
 
 func (m *OnlineUsersManager) broadcastOnlineUsers() {
 	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	connections := make(map[string]*SafeConn)
+	for username, conn := range m.connections {
+		connections[username] = conn
+	}
+	m.mutex.RUnlock()
 
-	// Préparer la liste des utilisateurs en ligne
-	onlineUsers := make([]OnlineUser, 0)
-
-	// Récupérer toutes les rooms actives
+	// Get active rooms with proper locking
 	activeRooms := m.roomManager.GetActiveRooms()
-
-	// Créer un ensemble des utilisateurs en room
 	usersInRooms := make(map[string]bool)
 	for _, room := range activeRooms {
 		usersInRooms[room.WhitePlayer.Username] = true
 		usersInRooms[room.BlackPlayer.Username] = true
 	}
 
-	// Parcourir les connexions
-	for username := range m.connections {
+	onlineUsers := make([]OnlineUser, 0)
+	for username := range connections {
 		user, err := m.userStore.GetUser(username)
-		if err == nil {
-			// N'ajouter que les utilisateurs qui ne sont pas dans une room
-			if _, inRoom := usersInRooms[username]; !inRoom {
-				onlineUsers = append(onlineUsers, OnlineUser{
-					ID:       user.ID,
-					Username: user.UserName,
-					IsInRoom: false,
-				})
-			}
+		if err == nil && !usersInRooms[username] {
+			onlineUsers = append(onlineUsers, OnlineUser{
+				ID:       user.ID,
+				Username: user.UserName,
+				IsInRoom: false,
+			})
 		}
 	}
 
-	// Préparer le message
 	message := WebSocketMessage{
 		Type:    "online_users",
 		Content: string(mustJson(onlineUsers)),
 	}
 
-	// Envoyer à tous les clients connectés
-	for _, conn := range m.connections {
-		err := conn.WriteJSON(message)
-		if err != nil {
-			log.Printf("Error broadcasting to client: %v", err)
+	for _, conn := range connections {
+		if err := conn.WriteJSON(message); err != nil {
+			log.Printf("Error broadcasting: %v", err)
 		}
 	}
-
-	log.Printf("Online users: %+v", onlineUsers)
 }
 
-// Méthode similaire pour getCurrentOnlineUsers
 func (m *OnlineUsersManager) getCurrentOnlineUsers() []OnlineUser {
 	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	connections := make(map[string]*SafeConn)
+	for username, conn := range m.connections {
+		connections[username] = conn
+	}
+	m.mutex.RUnlock()
 
-	// Récupérer toutes les rooms actives
 	activeRooms := m.roomManager.GetActiveRooms()
-
-	// Créer un ensemble des utilisateurs en room
 	usersInRooms := make(map[string]bool)
 	for _, room := range activeRooms {
 		usersInRooms[room.WhitePlayer.Username] = true
@@ -527,17 +521,14 @@ func (m *OnlineUsersManager) getCurrentOnlineUsers() []OnlineUser {
 	}
 
 	onlineUsers := make([]OnlineUser, 0)
-	for username := range m.connections {
+	for username := range connections {
 		user, err := m.userStore.GetUser(username)
-		if err == nil {
-			// N'ajouter que les utilisateurs qui ne sont pas dans une room
-			if _, inRoom := usersInRooms[username]; !inRoom {
-				onlineUsers = append(onlineUsers, OnlineUser{
-					ID:       user.ID,
-					Username: user.UserName,
-					IsInRoom: false,
-				})
-			}
+		if err == nil && !usersInRooms[username] {
+			onlineUsers = append(onlineUsers, OnlineUser{
+				ID:       user.ID,
+				Username: user.UserName,
+				IsInRoom: false,
+			})
 		}
 	}
 	return onlineUsers
