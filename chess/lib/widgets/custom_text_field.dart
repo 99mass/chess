@@ -1,3 +1,4 @@
+import 'package:chess/constant/constants.dart';
 import 'package:flutter/material.dart';
 
 class CustomTextField extends StatelessWidget {
@@ -13,28 +14,26 @@ class CustomTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextFormField(
-      cursorColor: Colors.black87,
-      style: const TextStyle(color: Colors.white),
+      cursorColor: ColorsConstants.white,
+      style: const TextStyle(color: ColorsConstants.white),
       controller: controller,
       decoration: InputDecoration(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
+        contentPadding: const EdgeInsets.all(20.0),
         hintText: hintText,
-        hintStyle: const TextStyle(color: Colors.black),
+        hintStyle: const TextStyle(
+            color: ColorsConstants.white, height: 1.0),
         focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black.withOpacity(.8)),
           borderRadius: BorderRadius.circular(4.0),
         ),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.grey.withOpacity(.8)),
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withOpacity(.8)),
           borderRadius: BorderRadius.circular(8.0),
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.5),
+        fillColor: ColorsConstants.colorBg3,
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 0.0),
+          child: Image.asset('assets/icons8_user_24.png'),
+        ),
       ),
     );
   }

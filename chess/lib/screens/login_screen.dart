@@ -1,8 +1,11 @@
+import 'package:chess/constant/constants.dart';
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/user_service.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
+import 'package:chess/widgets/custom_image_spinner.dart';
+import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:chess/widgets/custom_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -21,30 +24,24 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.red.shade400,
-      ),
-    );
+    showCustomSnackBarTop(context, message);
   }
 
   String? _validateInputs() {
     if (userName.text.isEmpty) {
-      return 'Please enter your username';
+      return 'Veuillez entrer votre nom d\'utilisateur';
     }
     if (userName.text.length > 10 || userName.text.length < 3) {
-      return 'Username must be between 3 and 10 characters';
+      return 'Le nom d\'utilisateur doit avoir entre 3 et 10 caract res';
     }
     if (userName.text.contains(RegExp(r'[^\x00-\x7F]'))) {
-      return 'Username cannot contain emojis';
+      return 'Le nom d\'utilisateur ne peut pas contenir d\'emoji';
     }
     return null;
   }
 
-
   Future<void> _login() async {
+
     final errorMessage = _validateInputs();
     if (errorMessage != null) {
       _showError(errorMessage);
@@ -71,17 +68,18 @@ class _LoginScreenState extends State<LoginScreen> {
       } on AuthException catch (e) {
         String message;
         if (e.statusCode == 409) {
-          message = 'User already has an active session';
+          message = 'L\'utilisateur à déja  une session active';
         } else if (e.statusCode == 400) {
-          message = 'Invalid username or password format';
+          message = 'Format du nom d\'utilisateur ou du mot de passe invalide';
         } else {
-          message = 'Authentication failed: ${e.message}';
+          message = 'Échec de l\'authentification : ${e.message}';
         }
         _showError(message);
       }
     } catch (e) {
       print('Connection error: $e');
-      _showError('Unable to connect, check your network.');
+      _showError(
+          'Impossible de se connecter, vérifiez votre connexion internet.');
     } finally {
       setState(() {
         _isLoading = false;
@@ -95,11 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         width: double.infinity,
         decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/login_bg.jpg'),
-            fit: BoxFit.cover,
-          ),
-          color: Colors.black,
+          color: ColorsConstants.colorBg,
         ),
         child: Center(
           child: Form(
@@ -108,42 +102,50 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 300,
-                  child: CustomTextField(
-                    controller: userName,
-                    hintText: 'Enter your username',
+                const SizedBox(
+                  child: Image(
+                    image: AssetImage('assets/chess_logo.png'),
+                    width: 80.0,
+                    height: 80.0,
                   ),
                 ),
-                const SizedBox(height: 16.0),
+                const SizedBox(height: 50.0),
+                SizedBox(
+                  width: 300,
+                  height: 55,
+                  child: CustomTextField(
+                    controller: userName,
+                    hintText: 'Nom de l\'utilisateur',
+                  ),
+                ),
+                const SizedBox(height: 25.0),
                 SizedBox(
                   width: 300,
                   height: 60,
                   child: ElevatedButton(
                     onPressed: _login,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber.withOpacity(0.5),
+                      backgroundColor: ColorsConstants.colorGreen,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8.0),
                       ),
-                      shadowColor: Colors.black.withOpacity(0.3),
                       elevation: 8,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
-                          'Get Started',
+                          'Se connecter',
                           style: TextStyle(
                             fontSize: 20.0,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: ColorsConstants.white,
                           ),
                         ),
                         if (_isLoading) const SizedBox(width: 8),
                         if (_isLoading)
-                          const CircularProgressIndicator(
-                            color: Colors.black87,
+                          const CustomImageSpinner(
+                            size: 30.0,
+                            duration: Duration(milliseconds: 2000),
                           ),
                       ],
                     ),

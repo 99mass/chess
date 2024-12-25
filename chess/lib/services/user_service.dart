@@ -49,11 +49,11 @@ class UserService {
 
       // Gérer spécifiquement l'erreur d'authentification
       if (createResponse.statusCode == 409) {
-        throw AuthException('User already has an active session', createResponse.statusCode);
+        throw AuthException('L\'utilisateur à déja  une session active', createResponse.statusCode);
       }
 
       throw AuthException(
-        'Failed to create/authenticate user: ${createResponse.body}',
+        'Echec de la création/authentification de l\'utilisateur: ${createResponse.body}',
         createResponse.statusCode
       );
     } catch (e) {

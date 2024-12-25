@@ -12,10 +12,16 @@
             "isnOline": false,
             "isInRoom": false
         },
+        "Pixel 44": {
+            "id": "2f08573f2b44dc5640e04a70a7929f11",
+            "username": "Pixel 44",
+            "isnOline": false,
+            "isInRoom": false
+        },
         "Pixel 5": {
             "id": "72b20ddf41e4980e0d6924dffd3e4c32",
             "username": "Pixel 5",
-            "isnOline": false,
+            "isnOline": true,
             "isInRoom": false
         },
         "Pixel 6": {
