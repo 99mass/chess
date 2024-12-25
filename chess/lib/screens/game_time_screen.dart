@@ -1,6 +1,7 @@
 import 'package:chess/constant/constants.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_board_screen.dart';
+import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,8 +14,8 @@ class GameTimeScreen extends StatefulWidget {
 
 class _GameTimeScreenState extends State<GameTimeScreen> {
   // Définir les options de temps de jeu
-  final List<int> timeOptions = [1, 5, 10, 20, 30, 60];
-  int selectedTime = 10; // Valeur par défaut de 10 minutes
+  final List<int> timeOptions = [3, 5, 10, 20, 30, 60];
+  int selectedTime = 10;
 
   // Définir les niveaux de difficulté
   final List<GameDifficulty> difficultyLevels = [
@@ -23,11 +24,11 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
     GameDifficulty.hard
   ];
   GameDifficulty selectedDifficulty =
-      GameDifficulty.medium; // Valeur par défaut
+      GameDifficulty.medium;
 
   // Définir les options de couleurs de pions
   final List<PlayerColor> colorOptions = [PlayerColor.white, PlayerColor.black];
-  PlayerColor selectedColor = PlayerColor.white; // Valeur par défaut
+  PlayerColor selectedColor = PlayerColor.white;
   bool isLoading = false;
 
   void _startGame(GameProvider gameProvider) async {
@@ -44,10 +45,12 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
     gameProvider.setIsloadind(value: true);
     gameProvider.setIsGameEnd(value: false);
 
-    // Ajout d'un délai artificiel pour voir le spinner
     await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -62,231 +65,255 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
     final gameProvider = context.read<GameProvider>();
 
     return Scaffold(
-      backgroundColor: Colors.black54,
       appBar: AppBar(
-        title: const Text(
-          'Game Time Selection',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+        automaticallyImplyLeading: true,
+        backgroundColor: ColorsConstants.colorBg,
+        leading: IconButton(
+          icon: Image.asset(
+            'assets/icons8_arrow_back.png',
+            width: 30,
           ),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        backgroundColor: Colors.amber[700],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Game Duration',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          color: ColorsConstants.colorBg,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                margin: const EdgeInsets.only(bottom: 20.0),
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/chess_logo.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
-            // Grille de sélection de temps
-            Wrap(
-              spacing: 15,
-              runSpacing: 15,
-              children: timeOptions.map((time) {
-                return ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      selectedTime = time;
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selectedTime == time
-                        ? Colors.amber[600]
-                        : Colors.grey[800],
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(100, 60),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                  child: Text(
-                    '$time min',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: selectedTime == time
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 30),
-
-            // Sélection de difficulté uniquement en mode ordinateur
-            if (gameProvider.computerMode) ...[
               const Text(
-                'Game Difficulty',
+                'Choisir les options',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 24,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 30),
+
+              // Sélection de couleur de pions
               Wrap(
-                spacing: 15,
                 runSpacing: 15,
-                children: difficultyLevels.map((difficulty) {
+                children: colorOptions.map((PlayerColor colorP) {
                   return ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        selectedDifficulty = difficulty;
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: selectedDifficulty == difficulty
-                          ? Colors.amber[600]
-                          : Colors.grey[800],
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(100, 60),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                    child: Text(
-                      switch (difficulty) {
-                        GameDifficulty.easy => 'easy',
-                        GameDifficulty.medium => 'medium',
-                        GameDifficulty.hard => 'hard',
+                      onPressed: () {
+                        setState(() {
+                          selectedColor = colorP;
+                        });
                       },
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: selectedDifficulty == difficulty
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: selectedColor == colorP
+                            ? ColorsConstants.colorGreen
+                            : ColorsConstants.colorBg3,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(150, 80),
+                        shape: RoundedRectangleBorder(
+                          side: const BorderSide(color: ColorsConstants.white),
+                          borderRadius: BorderRadius.only(
+                            topLeft: colorP == PlayerColor.white
+                                ? const Radius.circular(10)
+                                : const Radius.circular(0),
+                            bottomLeft: colorP == PlayerColor.white
+                                ? const Radius.circular(10)
+                                : const Radius.circular(0),
+                            topRight: colorP == PlayerColor.black
+                                ? const Radius.circular(10)
+                                : const Radius.circular(0),
+                            bottomRight: colorP == PlayerColor.black
+                                ? const Radius.circular(10)
+                                : const Radius.circular(0),
+                          ),
+                        ),
                       ),
-                    ),
-                  );
+                      child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image(
+                              image: AssetImage(
+                                  'assets/${colorP == PlayerColor.white ? 'icons8_white_chess' : 'icons8_black_chess'}.png'),
+                              width: 30,
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              colorP == PlayerColor.white ? 'Blanc' : 'Noir',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: selectedColor == colorP
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ]));
                 }).toList(),
               ),
               const SizedBox(height: 30),
-            ],
 
-            // Sélection de couleur de pions
-            const Text(
-              'Player Color',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 15),
-            Wrap(
-              spacing: 15,
-              runSpacing: 15,
-              children: colorOptions.map((color) {
-                return ElevatedButton(
-                  onPressed: () {
+              // Grille de Sélection de difficulté
+              Container(
+                width: 300,
+                height: 70,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: ColorsConstants.colorBg3,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: ColorsConstants.white,
+                    )),
+                child: DropdownButton<GameDifficulty>(
+                  isExpanded: true,
+                  menuWidth: 300,
+                  underline: Container(),
+                  dropdownColor: ColorsConstants.colorBg3,
+                  icon: const Image(
+                    image: AssetImage('assets/icons8_arrow_down.png'),
+                    width: 30,
+                    height: 30,
+                  ),
+                  value: selectedDifficulty,
+                  onChanged: (GameDifficulty? newValue) {
                     setState(() {
-                      selectedColor = color;
+                      selectedDifficulty = newValue!;
                     });
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selectedColor == color
-                        ? Colors.amber[600]
-                        : Colors.grey[800],
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(100, 60),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                  child: Text(
-                    switch (color) {
-                      PlayerColor.white => 'White',
-                      PlayerColor.black => 'Black',
-                    },
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: selectedColor == color
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 30),
-
-            ElevatedButton(
-              onPressed: isLoading ? null : () => _startGame(gameProvider),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber[600],
-                foregroundColor: Colors.black87,
-                minimumSize: const Size(250, 60),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
+                  items: difficultyLevels.map((difficulty) {
+                    return DropdownMenuItem<GameDifficulty>(
+                        value: difficulty,
+                        child: Row(
+                          children: [
+                            const Image(
+                              image: AssetImage('assets/icons8_level.png'),
+                              width: 30,
+                              height: 30,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              switch (difficulty) {
+                                GameDifficulty.easy => 'Débutant',
+                                GameDifficulty.medium => 'Intermédiaire',
+                                GameDifficulty.hard => 'Expert',
+                              },
+                              style: TextStyle(
+                                color: ColorsConstants.white,
+                                fontSize: 18,
+                                fontWeight: selectedDifficulty == difficulty
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ));
+                  }).toList(),
                 ),
-                elevation: 5,
               ),
-              child: isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.black87),
+
+              const SizedBox(height: 30),
+
+              // Grille de sélection de temps
+              Container(
+                width: 300,
+                height: 70,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: ColorsConstants.colorBg3,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: ColorsConstants.white,
+                    )),
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  menuWidth: 300,
+                  underline: Container(),
+                  dropdownColor: ColorsConstants.colorBg3,
+                  icon: const Image(
+                    image: AssetImage('assets/icons8_arrow_down.png'),
+                    width: 30,
+                    height: 30,
+                  ),
+                  value: selectedTime,
+                  onChanged: (int? newValue) {
+                    setState(() {
+                      selectedTime = newValue!;
+                    });
+                  },
+                  items: timeOptions.map((time) {
+                    return DropdownMenuItem<int>(
+                      value: time,
+                      child: Row(
+                        children: [
+                          const Image(
+                            image: AssetImage('assets/icons8_time.png'),
+                            width: 30,
+                            height: 30,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            '$time min',
+                            style: TextStyle(
+                              color: ColorsConstants.white,
+                              fontSize: 18,
+                              fontWeight: selectedTime == time
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
                       ),
-                    )
-                  : const Text(
-                      'Start Game',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              ElevatedButton(
+                  onPressed: () => _startGame(gameProvider),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorsConstants.colorGreen,
+                    foregroundColor: ColorsConstants.white,
+                    minimumSize: const Size(300, 60),
+                    maximumSize: const Size(300, 60),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
-            ),
-
-            // Bouton pour confirmer la sélection
-            // ElevatedButton(
-            //   onPressed: () {
-            //     gameProvider.setCompturMode(value: true);
-            //     gameProvider.setFriendsMode(value: false);
-            //     gameProvider.setGameDifficulty(
-            //         gameDifficulty: selectedDifficulty);
-            //     gameProvider.setGameTime(gameTime: selectedTime);
-            //     gameProvider.setPlayerColor(
-            //         player: selectedColor == PlayerColor.white ? 0 : 1);
-            //     gameProvider.setIsloadind(value: true);
-            //     gameProvider.setIsGameEnd(value: false);
-
-            //     // Naviguer vers l'écran de jeu avec le temps et la difficulté sélectionnés
-            //     Navigator.pushReplacement(
-            //       context,
-            //       MaterialPageRoute(
-            //         builder: (context) => const GameBoardScreen(),
-            //       ),
-            //     );
-            //   },
-            //   style: ElevatedButton.styleFrom(
-            //     backgroundColor: Colors.amber[600],
-            //     foregroundColor: Colors.black87,
-            //     minimumSize: const Size(250, 60),
-            //     shape: RoundedRectangleBorder(
-            //       borderRadius: BorderRadius.circular(15),
-            //     ),
-            //     elevation: 5,
-            //   ),
-            //   child: const Text(
-            //     'Start Game',
-            //     style: TextStyle(
-            //       fontSize: 20,
-            //       fontWeight: FontWeight.bold,
-            //     ),
-            //   ),
-            // ),
-          ],
+                    elevation: 5,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Démarrer le jeu',
+                        style: TextStyle(
+                          fontSize: 24,
+                        ),
+                      ),
+                      if (isLoading)
+                        const SizedBox(
+                          width: 10.0,
+                        ),
+                      if (isLoading)
+                        const CustomImageSpinner(
+                          size: 30.0,
+                          duration: Duration(milliseconds: 2000),
+                        ),
+                    ],
+                  )),
+            ],
+          ),
         ),
       ),
     );
