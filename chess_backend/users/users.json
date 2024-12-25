@@ -1,5 +1,11 @@
 {
     "users": {
+        "Pixel 200": {
+            "id": "b0b33c87c6268c3bbd8912561a2e9103",
+            "username": "Pixel 200",
+            "isnOline": true,
+            "isInRoom": false
+        },
         "Pixel 3": {
             "id": "dbb8c7c90d7014ee34585213e7e3b90f",
             "username": "Pixel 3",

@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chess/provider/game_provider.dart';
@@ -116,10 +118,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           return AlertDialog(
             title: const Text('Connection Error'),
             content: const Text(
-                'Unable to connect to the server. Please check your internet connection and try again.'),
+                'Impossible de se connecter au serveur. Veuillez vérifier votre connexion internet et réessayer.'),
             actions: [
               TextButton(
-                child: const Text('Retry'),
+                child: const Text('Réessayer'),
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
                   _connectionAttempts = 0;
@@ -127,7 +129,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 },
               ),
               TextButton(
-                child: const Text('Close'),
+                child: const Text('Fermer'),
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
                 },
@@ -150,32 +152,36 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     final gameProvider = context.read<GameProvider>();
 
     return Scaffold(
-      backgroundColor: Colors.black54,
-      body: Center(
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: ColorsConstants.colorBg,
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Show connection status
             if (_isConnecting)
-              Column(
+              const Column(
                 children: [
-                  const CircularProgressIndicator(
-                    color: Colors.white,
+                  CustomImageSpinner(
+                    size: 30.0,
+                    duration: Duration(milliseconds: 2000),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                   Text(
-                    'Connecting... (Attempt ${_connectionAttempts + 1})',
-                    style: const TextStyle(color: Colors.white),
+                    'Connexion en cours...',
+                    style: TextStyle(color: Colors.white),
                   ),
                 ],
               ),
 
             Container(
-              width: 300,
-              height: 200,
+              width: 80,
+              height: 80,
               decoration: const BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/knight_piece.png'),
+                  image: AssetImage('assets/chess_logo.png'),
                   fit: BoxFit.contain,
                 ),
               ),
@@ -183,9 +189,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                const SizedBox(height: 20),
+                const Text(
+                  'Nouvelle partie',
+                  style: TextStyle(fontSize: 25, color: ColorsConstants.white),
+                ),
                 const SizedBox(height: 40),
                 _buildMenuButton(
-                  'PLAYER vs COMPUTER',
+                  'vs Ordinateur','icons8_ai.png',
                   onTap: _webSocketService.isConnected
                       ? () {
                           gameProvider.setCompturMode(value: true);
@@ -200,7 +211,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 ),
                 const SizedBox(height: 15),
                 _buildMenuButton(
-                  'PLAYER vs FRIENDS ',
+                  'vs Amis', 'icons8_handshake.png',
                   onTap: _webSocketService.isConnected
                       ? () {
                           gameProvider.setFriendsMode(value: true);
@@ -221,49 +232,37 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
   }
 
-  Widget _buildMenuButton(String text, {VoidCallback? onTap}) {
+  Widget _buildMenuButton(String text, String imageAsset, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
-      child: Opacity(
-        opacity: onTap != null ? 1.0 : 0.5,
-        child: Container(
-          padding: const EdgeInsets.only(bottom: 10),
-          width: 300,
-          height: 80,
-          decoration: BoxDecoration(
-            image: const DecorationImage(
-              image: AssetImage('assets/wooden_button.png'),
-              fit: BoxFit.fill,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        width: 280,
+        decoration: const BoxDecoration(
+          color: ColorsConstants.colorBg2,
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 40),
+            Image(
+              image: AssetImage('assets/$imageAsset'),
+              width: 70,
+              height: 70,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
+            const SizedBox(width: 10),
+            Text(
               text,
-              style: TextStyle(
-                color: onTap != null ? Colors.white : Colors.grey,
-                fontSize: 22,
+              style: const TextStyle(
+                color: ColorsConstants.white,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-                shadows: const [
-                  Shadow(
-                    blurRadius: 2.0,
-                    color: Colors.black,
-                    offset: Offset(1.0, 1.0),
-                  ),
-                ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
+
 }
