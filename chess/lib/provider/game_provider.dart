@@ -153,7 +153,7 @@ class GameProvider extends ChangeNotifier {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
-          _computerMode = false;
+          _isLoading = false;
           _friendsMode = false;
           _onWillPop = true;
           showDialogGameOver(context, message, score: score);
@@ -198,9 +198,15 @@ class GameProvider extends ChangeNotifier {
     });
   }
 
-  void setIsloadind({required bool value}) {
-    _isLoading = value;
-    notifyListeners();
+  void setIsloading(bool value) {
+    // if (!_isLoading) {
+    //   _isLoading = value;
+    //   notifyListeners();
+    // }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isLoading = value;
+      notifyListeners();
+    });
   }
 
   void setPlayerColor({required int player}) {

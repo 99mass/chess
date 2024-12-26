@@ -8,6 +8,7 @@ import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/stockfish_uic_command.dart';
+import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:squares/squares.dart';
@@ -38,7 +39,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       _webSocketService.connectWebSocket(context);
     });
 
-    // Initialize stockfish only for computer mode
     stockfish = _gameProvider.computerMode ? StockfishInstance.instance : null;
     _gameProvider.resetGame(newGame: false);
 
@@ -63,6 +63,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     // Handle first move based on game mode
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_gameProvider.computerMode) {
+        _gameProvider.setIsloading(true);
         letOtherPlayerPlayFirst();
       }
     });
@@ -141,6 +142,14 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     }
   }
 
+  void letOtherPlayerPlayFirst2() async {
+    if (_gameProvider.computerMode &&
+        !_gameProvider.aiThinking &&
+        _gameProvider.playerColor == PlayerColor.black) {
+      _triggerAiMove();
+    }
+  }
+
   void _triggerAiMove() async {
     if (stockfish == null) return;
 
@@ -190,16 +199,20 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     if (_gameProvider.isGameEnd) {
       _chessTimer.stop();
       _chessTimer.dispose();
+      _gameProvider.setIsloading(false);
     }
     if (_gameProvider.exitGame) {
+      _gameProvider.setIsloading(false);
       _chessTimer.stop();
       _chessTimer.dispose();
       _timer?.cancel();
+      _timer = null;
       _gameProvider.setFriendsMode(value: false);
       if (stockfish != null) {
         stockfish!.stdin = StockfishUicCommand.stop;
         _webSocketService.disposeInvitationStream();
         _stockfishSubscription?.cancel();
+        stockfish = null;
       }
 
       _gameProvider.resetGame(newGame: true);
@@ -216,86 +229,41 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
-        if (!_gameProvider.onWillPop) {
-          bool? confirmExit = await showDialog<bool>(
-            context: context,
-            builder: (BuildContext context) {
-              return _ConfirmExitDialog();
-            },
-          );
-
-          if (confirmExit == true) {
-            _cleanup();
-
-            Timer(const Duration(seconds: 2), () {});
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const MainMenuScreen(),
-              ),
-            );
-
-            return true;
-          }
-        }
-
-        if (_gameProvider.onWillPop) {
-          _cleanup();
-          _gameProvider.setOnWillPop(value: false);
-          _gameProvider.setGameModel();
-
-          Timer(const Duration(seconds: 2), () {});
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MainMenuScreen(),
-            ),
-          );
-
-          return true;
-        }
-
-        return false;
+        return exitGame0();
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
           // Determine board size based on screen constraints
-          double boardSize = constraints.maxWidth > constraints.maxHeight
-              ? constraints.maxHeight * 0.8
-              : constraints.maxWidth * 0.9;
+          // double boardSize = constraints.maxWidth > constraints.maxHeight
+          //     ? constraints.maxHeight * 0.95
+          //     : constraints.maxWidth * 0.95;
+          double boardSize = constraints.maxWidth;
 
           return Scaffold(
-              backgroundColor: Colors.black54,
+              backgroundColor: ColorsConstants.colorBg,
               appBar: AppBar(
-                title: Text(
-                  _gameProvider.computerMode
-                      ? 'Computer Game'
-                      : _gameProvider.friendsMode
-                          ? 'Multiplayer Game'
-                          : 'Chess Game',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
                 automaticallyImplyLeading: true,
-                backgroundColor: Colors.amber[700],
-                actions: [
-                  IconButton(
-                    onPressed: () {
-                      _chessTimer.reset();
-                      _gameProvider.resetGame(newGame: false);
-                      if (mounted) {
-                        if (_gameProvider.computerMode) {
-                          letOtherPlayerPlayFirst();
-                        }
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.restart_alt,
-                      color: Colors.white,
-                    ),
+                backgroundColor: ColorsConstants.colorBg,
+                leading: IconButton(
+                  icon: Image.asset(
+                    'assets/icons8_arrow_back.png',
+                    width: 30,
                   ),
+                  onPressed: () async {
+                    exitGame();
+                  },
+                ),
+                actions: [
+                  if (_gameProvider.computerMode && _gameProvider.isGameEnd)
+                    IconButton(
+                      onPressed: () {
+                        restartGame();
+                      },
+                      icon: Image.asset(
+                        'assets/icons8_restart.png',
+                        width: 40,
+                      ),
+                    ),
                 ],
               ),
               body: Consumer<GameProvider>(
@@ -309,95 +277,101 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
                     chessTimer: _chessTimer,
                     isUser: false);
 
-                return Center(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // User 2 (Top Player)
-                        SizedBox(
-                          width: boardSize,
-                          child: _buildUserTile(
-                            email: _getPlayerName(
+                return SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        margin: const EdgeInsets.symmetric(vertical: 20.0),
+                        decoration: const BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage('assets/chess_logo.png'),
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      // User 2 (Top Player)
+                      SizedBox(
+                        width: boardSize,
+                        child: _buildUserTile(
+                            name: _getPlayerName(
                                 isWhite: !gameProvider.isWhitePlayer),
-                            avatarUrl: 'avatar.png',
+                            avatarUrl: gameProvider.friendsMode
+                                ? 'avatar.png'
+                                : 'icons8_ai.png',
                             isTurn: gameProvider.friendsMode
                                 ? _gameProvider.isOpponentTurn
                                 : !_chessTimer.isWhiteTurn,
-                            tileColor: Colors.white,
-                            textColor: Colors.black,
                             timer: blackRemainingTime,
-                          ),
+                            size: boardSize),
+                      ),
+                      // Game Board
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 15.0,
                         ),
-                        // Game Board
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0,
-                            vertical: 12.0,
-                          ),
-                          // Friends Mode
-                          child: gameProvider.friendsMode
-                              ? SizedBox(
-                                  width: boardSize,
-                                  height: boardSize,
-                                  child: BoardController(
-                                    state: gameProvider.isWhitePlayer
-                                        ? gameProvider.state.board.flipped()
-                                        : gameProvider.state.board,
-                                    playState: gameProvider.state.state,
-                                    pieceSet: PieceSet.merida(),
-                                    theme: BoardTheme.blueGrey,
-                                    moves: gameProvider.state.moves,
-                                    onMove: _onMove,
-                                    onPremove: _onMove,
-                                    markerTheme: MarkerTheme(
-                                      empty: MarkerTheme.dot,
-                                      piece: MarkerTheme.corners(),
-                                    ),
-                                    promotionBehaviour:
-                                        PromotionBehaviour.autoPremove,
+                        // Friends Mode
+                        child: gameProvider.friendsMode
+                            ? SizedBox(
+                                width: boardSize,
+                                height: boardSize,
+                                child: BoardController(
+                                  state: gameProvider.isWhitePlayer
+                                      ? gameProvider.state.board.flipped()
+                                      : gameProvider.state.board,
+                                  playState: gameProvider.state.state,
+                                  pieceSet: PieceSet.merida(),
+                                  theme: BoardTheme.blueGrey,
+                                  moves: gameProvider.state.moves,
+                                  onMove: _onMove,
+                                  onPremove: _onMove,
+                                  markerTheme: MarkerTheme(
+                                    empty: MarkerTheme.dot,
+                                    piece: MarkerTheme.corners(),
                                   ),
-                                )
-                              // Computer Mode
-                              : SizedBox(
-                                  width: boardSize,
-                                  height: boardSize,
-                                  child: BoardController(
-                                    state: gameProvider.flipBoard
-                                        ? gameProvider.state.board.flipped()
-                                        : gameProvider.state.board,
-                                    playState: gameProvider.state.state,
-                                    pieceSet: PieceSet.merida(),
-                                    theme: BoardTheme.blueGrey,
-                                    moves: gameProvider.state.moves,
-                                    onMove: _onMove,
-                                    onPremove: _onMove,
-                                    markerTheme: MarkerTheme(
-                                      empty: MarkerTheme.dot,
-                                      piece: MarkerTheme.corners(),
-                                    ),
-                                    promotionBehaviour:
-                                        PromotionBehaviour.autoPremove,
-                                  ),
+                                  promotionBehaviour:
+                                      PromotionBehaviour.autoPremove,
                                 ),
-                        ),
-                        // User 1 (Bottom Player)
-                        SizedBox(
-                          width: boardSize,
-                          child: _buildUserTile(
-                            email: _getPlayerName(
+                              )
+                            // Computer Mode
+                            : SizedBox(
+                                width: boardSize,
+                                height: boardSize,
+                                child: BoardController(
+                                  state: gameProvider.flipBoard
+                                      ? gameProvider.state.board.flipped()
+                                      : gameProvider.state.board,
+                                  playState: gameProvider.state.state,
+                                  pieceSet: PieceSet.merida(),
+                                  theme: BoardTheme.blueGrey,
+                                  moves: gameProvider.state.moves,
+                                  onMove: _onMove,
+                                  onPremove: _onMove,
+                                  markerTheme: MarkerTheme(
+                                    empty: MarkerTheme.dot,
+                                    piece: MarkerTheme.corners(),
+                                  ),
+                                  promotionBehaviour:
+                                      PromotionBehaviour.autoPremove,
+                                ),
+                              ),
+                      ),
+                      // User 1 (Bottom Player)
+                      SizedBox(
+                        width: boardSize,
+                        child: _buildUserTile(
+                            name: _getPlayerName(
                                 isWhite: gameProvider.isWhitePlayer),
                             avatarUrl: 'avatar.png',
                             isTurn: gameProvider.friendsMode
                                 ? _gameProvider.isMyTurn
                                 : _chessTimer.isWhiteTurn,
-                            tileColor: Colors.white,
-                            textColor: Colors.black,
                             timer: whiteRemainingTime,
-                          ),
-                        ),
-                      ],
-                    ),
+                            size: boardSize),
+                      ),
+                    ],
                   ),
                 );
               }));
@@ -413,12 +387,14 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
     // Cancel any running timers
     _timer?.cancel();
+    _timer = null;
 
     // Stop Stockfish if it's running
     if (stockfish != null) {
       // Cancel Stockfish subscription
       _stockfishSubscription?.cancel();
       stockfish!.stdin = StockfishUicCommand.stop;
+      stockfish = null;
     }
 
     // Handle WebSocket room leaving for multiplayer mode
@@ -439,7 +415,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
       _webSocketService.sendMessage(roomLeaveJson);
     }
-
+    _gameProvider.setIsloading(false);
     // Dispose of WebSocket invitation stream
     _webSocketService.disposeInvitationStream();
 
@@ -447,70 +423,184 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     _gameProvider.resetGame(newGame: true);
   }
 
+  void exitGame() async {
+    if (!_gameProvider.onWillPop) {
+      bool? confirmExit = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return _ConfirmExitDialog();
+        },
+      );
+
+      if (confirmExit == true) {
+        _cleanup();
+
+        Timer(const Duration(seconds: 2), () {});
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainMenuScreen(),
+          ),
+        );
+      }
+    }
+
+    if (_gameProvider.onWillPop) {
+      _cleanup();
+      _gameProvider.setOnWillPop(value: false);
+      _gameProvider.setGameModel();
+
+      Timer(const Duration(seconds: 2), () {});
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainMenuScreen(),
+        ),
+      );
+    }
+  }
+
+  Future<bool> exitGame0() async {
+    if (!_gameProvider.onWillPop) {
+      bool? confirmExit = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return _ConfirmExitDialog();
+        },
+      );
+
+      if (confirmExit == true) {
+        _cleanup();
+
+        Timer(const Duration(seconds: 2), () {});
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MainMenuScreen(),
+          ),
+        );
+
+        return true;
+      }
+    }
+
+    if (_gameProvider.onWillPop) {
+      _cleanup();
+      _gameProvider.setOnWillPop(value: false);
+      _gameProvider.setGameModel();
+
+      Timer(const Duration(seconds: 2), () {});
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainMenuScreen(),
+        ),
+      );
+
+      return true;
+    }
+
+    return false;
+  }
+
+  void restartGame() async {
+    _gameProvider.setOnWillPop(value: false);
+    _chessTimer.reset();
+    _gameProvider.resetGame(newGame: false);
+    if (mounted) {
+      _chessTimer = ChessTimer(
+        initialMinutes: _gameProvider.gameTime,
+        startWithWhite: _gameProvider.playerColor == PlayerColor.white,
+        onTimeExpired: () {
+          _chessTimer.reset();
+        },
+        onTimerUpdate: () {
+          setState(() {});
+        },
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _chessTimer.start(
+          context: context,
+          playerColor: _gameProvider.playerColor,
+        );
+        _gameProvider.setIsloading(true);
+        _gameProvider.setIsGameEnd(value: false);
+        _gameProvider.setIsloading(true);
+        letOtherPlayerPlayFirst();
+      });
+    }
+  }
+
   String _getPlayerName({required bool isWhite}) {
     if (_gameProvider.computerMode) {
-      return !isWhite ? 'You' : 'Computer';
-    } 
+      return !isWhite ? _gameProvider.user.userName : 'Ordinateur';
+    }
     return isWhite
         ? _gameProvider.gameModel?.opponentUsername ?? ''
         : _gameProvider.user.userName;
   }
 
   Widget _buildUserTile(
-      {required String email,
+      {required String name,
       required String avatarUrl,
       required bool isTurn,
-      required Color tileColor,
-      required Color textColor,
-      required String timer}) {
-    return ListTile(
-      tileColor: tileColor,
-      leading: CircleAvatar(
-        backgroundImage: AssetImage(
-          'assets/$avatarUrl',
-        ),
-        radius: 20,
-        child: Align(
-          alignment: Alignment.topRight,
-          child: Container(
-            decoration: BoxDecoration(
-              color: isTurn ? Colors.green : Colors.grey,
-              shape: BoxShape.circle,
+      required String timer,
+      required double size}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          children: [
+            Image(
+              image: AssetImage(
+                'assets/$avatarUrl',
+              ),
+              width: 60,
+              height: 60,
             ),
-            child: const Icon(
-              Icons.play_arrow,
-              color: Colors.white,
-              size: 16,
+            const SizedBox(width: 10),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 22,
+                color: ColorsConstants.white,
+              ),
             ),
-          ),
+          ],
         ),
-      ),
-      title: Text(
-        email.split('@')[0],
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: textColor,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.access_time,
-            color: Colors.black,
-            size: 16,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            timer,
-            style: TextStyle(
-              color:
-                  int.parse(timer.split(':')[0]) <= 1 ? Colors.red : textColor,
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
+        Row(
+          children: [
+            if (isTurn && _gameProvider.isloading)
+              if (isTurn && _gameProvider.isloading && !_gameProvider.isGameEnd)
+                const CustomImageSpinner(
+                  size: 30.0,
+                  duration: Duration(milliseconds: 2000),
+                ),
+            const SizedBox(width: 10),
+            Container(
+              alignment: Alignment.center,
+              width: 100,
+              height: 60,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                color: isTurn
+                    ? ColorsConstants.colorGreen
+                    : ColorsConstants.colorBg2,
+              ),
+              child: Text(
+                timer,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: ColorsConstants.white,
+                  fontSize: 18,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          ],
+        )
+      ],
     );
   }
 
@@ -549,16 +639,19 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     _chessTimer.dispose();
 
     _timer?.cancel();
+    _timer = null;
 
     if (stockfish != null) {
       stockfish!.stdin = StockfishUicCommand.stop;
       _stockfishSubscription?.cancel();
+      stockfish = null;
     }
 
     if (_gameProvider.friendsMode) {
       _gameProvider.setGameModel();
       _gameProvider.setCurrentInvitation();
     }
+    _gameProvider.setIsloading(false);
     _webSocketService.disposeInvitationStream();
     _gameProvider.resetGame(newGame: true);
 

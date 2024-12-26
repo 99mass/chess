@@ -60,9 +60,10 @@ class ChessTimer {
 
   void _handleTimeExpired(BuildContext context) {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    gameProvider.setIsGameEnd(value: true);
     gameProvider.setOnWillPop(value: true);
     gameProvider.setFriendsMode(value: false);
-    gameProvider.setCompturMode(value: false);
+    gameProvider.setIsloading( false);
     showDialogGameOver(
         context, _whiteRemainingTime == 0 ? 'Black wins!' : 'White wins!',
         onClose: () {

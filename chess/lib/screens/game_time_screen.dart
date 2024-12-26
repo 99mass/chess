@@ -42,7 +42,7 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
     gameProvider.setGameTime(gameTime: selectedTime);
     gameProvider.setPlayerColor(
         player: selectedColor == PlayerColor.white ? 0 : 1);
-    gameProvider.setIsloadind(value: true);
+    // gameProvider.setIsloading( true);
     gameProvider.setIsGameEnd(value: false);
 
     await Future.delayed(const Duration(seconds: 1));
@@ -308,7 +308,7 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
                       if (isLoading)
                         const CustomImageSpinner(
                           size: 30.0,
-                          duration: Duration(milliseconds: 2000),
+                          duration: Duration(milliseconds: 20000),
                         ),
                     ],
                   )),
