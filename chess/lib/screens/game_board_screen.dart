@@ -8,6 +8,7 @@ import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/stockfish_uic_command.dart';
+import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -234,9 +235,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           // Determine board size based on screen constraints
-          // double boardSize = constraints.maxWidth > constraints.maxHeight
-          //     ? constraints.maxHeight * 0.95
-          //     : constraints.maxWidth * 0.95;
           double boardSize = constraints.maxWidth;
 
           return Scaffold(
@@ -428,7 +426,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       bool? confirmExit = await showDialog<bool>(
         context: context,
         builder: (BuildContext context) {
-          return _ConfirmExitDialog();
+          return const CustomAlertDialog(
+            titleMessage: "Quitter la partie ?",
+            subtitleMessage:
+                "Êtes-vous sûr de vouloir abandonner la partie en cours ?",
+                simpleDialog: false,
+          );
         },
       );
 
@@ -465,7 +468,12 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       bool? confirmExit = await showDialog<bool>(
         context: context,
         builder: (BuildContext context) {
-          return _ConfirmExitDialog();
+          return const CustomAlertDialog(
+            titleMessage: "Quitter la partie ?",
+            subtitleMessage:
+                "Êtes-vous sûr de vouloir abandonner la partie en cours ?",
+                simpleDialog: false,
+          );
         },
       );
 
@@ -571,12 +579,11 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         ),
         Row(
           children: [
-            if (isTurn && _gameProvider.isloading)
-              if (isTurn && _gameProvider.isloading && !_gameProvider.isGameEnd)
-                const CustomImageSpinner(
-                  size: 30.0,
-                  duration: Duration(milliseconds: 2000),
-                ),
+            if (isTurn && _gameProvider.isloading && !_gameProvider.isGameEnd)
+              const CustomImageSpinner(
+                size: 30.0,
+                duration: Duration(milliseconds: 2000),
+              ),
             const SizedBox(width: 10),
             Container(
               alignment: Alignment.center,
@@ -600,28 +607,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
             )
           ],
         )
-      ],
-    );
-  }
-
-  // ignore: non_constant_identifier_names
-  Widget _ConfirmExitDialog() {
-    return AlertDialog(
-      title: const Text('Exit Game'),
-      content: const Text('Are you sure you want to exit the game?'),
-      actions: [
-        TextButton(
-          child: const Text('No'),
-          onPressed: () {
-            Navigator.of(context).pop(false);
-          },
-        ),
-        TextButton(
-          child: const Text('Yes'),
-          onPressed: () {
-            Navigator.of(context).pop(true);
-          },
-        ),
       ],
     );
   }

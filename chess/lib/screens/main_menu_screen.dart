@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -114,29 +115,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: const Text('Connection Error'),
-            content: const Text(
-                'Impossible de se connecter au serveur. Veuillez vérifier votre connexion internet et réessayer.'),
-            actions: [
-              TextButton(
-                child: const Text('Réessayer'),
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  _connectionAttempts = 0;
-                  _forceWebSocketConnection();
-                },
-              ),
-              TextButton(
-                child: const Text('Fermer'),
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                },
-              ),
-            ],
-          );
-        },
+        builder: (context) => const CustomAlertDialog(
+          titleMessage: "Connection Error!",
+          subtitleMessage:
+              "Impossible de se connecter au serveur.\nVeuillez vérifier votre connexion internet et réessayer.",
+          simpleDialog: true,
+        ),
       );
     }
   }
@@ -196,7 +180,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 ),
                 const SizedBox(height: 40),
                 _buildMenuButton(
-                  'vs Ordinateur','icons8_ai.png',
+                  'vs Ordinateur',
+                  'icons8_ai.png',
                   onTap: _webSocketService.isConnected
                       ? () {
                           gameProvider.setCompturMode(value: true);
@@ -211,7 +196,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 ),
                 const SizedBox(height: 15),
                 _buildMenuButton(
-                  'vs Amis', 'icons8_handshake.png',
+                  'vs Amis',
+                  'icons8_handshake.png',
                   onTap: _webSocketService.isConnected
                       ? () {
                           gameProvider.setFriendsMode(value: true);
@@ -232,7 +218,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
   }
 
-  Widget _buildMenuButton(String text, String imageAsset, {VoidCallback? onTap}) {
+  Widget _buildMenuButton(String text, String imageAsset,
+      {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -264,5 +251,4 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       ),
     );
   }
-
 }

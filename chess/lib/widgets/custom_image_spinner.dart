@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class CustomImageSpinner extends StatefulWidget {
   final double size;
   final Duration duration;
+  final bool type;
 
   const CustomImageSpinner({
     super.key,
     this.size = 50.0,
     this.duration = const Duration(seconds: 1),
+    this.type = true,
   });
 
   @override
@@ -24,7 +26,7 @@ class _CustomImageSpinnerState extends State<CustomImageSpinner>
     _controller = AnimationController(
       vsync: this,
       duration: widget.duration,
-    )..repeat(); 
+    )..repeat();
   }
 
   @override
@@ -38,11 +40,12 @@ class _CustomImageSpinnerState extends State<CustomImageSpinner>
     return RotationTransition(
       turns: _controller,
       child: Image.asset(
-        'assets/icons8_spinner_50.png',
+        widget.type
+            ? 'assets/icons8_spinner_50.png'
+            : 'assets/icons8_waiting.png',
         width: widget.size,
         height: widget.size,
       ),
     );
   }
 }
-

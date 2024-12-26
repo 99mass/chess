@@ -28,12 +28,12 @@ void showCustomSnackBarTop(BuildContext context, String message) {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [ColorsConstants.colorBg2, ColorsConstants.colorGreen , ColorsConstants.colorBg2],
+                gradient: const LinearGradient(
+                  colors: [ColorsConstants.colorBg2, ColorsConstants.colorGreen , ColorsConstants.colorBg2],
 
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(

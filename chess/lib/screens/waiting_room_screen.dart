@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/widgets/custom_alert_dialog.dart';
+import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import 'package:chess/model/invitation_model.dart';
 import 'package:provider/provider.dart';
 import 'package:chess/provider/game_provider.dart';
@@ -64,32 +66,28 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('Request Timeout'),
-            content: const Text(
-                'The invitation request has timed out. Please try again.'),
-            actions: [
-              TextButton(
-                child: const Text('OK'),
-                onPressed: () {
-                   _cancelTimer();
-                  Navigator.of(context).pop();
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MainMenuScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
+          builder: (context) => CustomAlertDialog(
+            titleMessage: "Demande expirée !",
+            subtitleMessage:
+                "La demande d'invitation a expirée. Veuillez réessayer.",
+            simpleDialog: true,
+            onOk: () {
+              _cancelTimer();
+              Navigator.of(context).pop();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MainMenuScreen(),
+                ),
+              );
+            },
           ),
         );
       }
     }
   }
 
-   void _cancelTimer() {
+  void _cancelTimer() {
     if (_timeoutTimer != null) {
       _timeoutTimer!.cancel();
       _timeoutTimer = null;
@@ -98,7 +96,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
 
   @override
   void dispose() {
-   _cancelTimer();
+    _cancelTimer();
     _controller.dispose();
     _webSocketService.disposeInvitationStream();
     _timeoutTimer?.cancel();
@@ -111,41 +109,36 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     // Show confirmation dialog
     bool? shouldExit = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel Game Invitation'),
-        content: const Text('Are you sure you want to leave the waiting room?'),
-        actions: [
-          TextButton(
-            child: const Text('No'),
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
-          TextButton(
-            child: const Text('Yes'),
-            onPressed: () {
-              if (invitation != null) {
-                _webSocketService.sendInvitationCancel(invitation!);
-              }
-
-              _cancelTimer();
-
-              _timeoutTimer?.cancel(); // Cancel the timeout timer
-              _timeoutTimer = null;
-
-              Timer(const Duration(seconds: 1), () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MainMenuScreen(),
-                  ),
-                );
-              });
-            },
-          ),
-        ],
+      builder: (context) => const CustomAlertDialog(
+        titleMessage: "Annuler l'invitation ?",
+        subtitleMessage:
+            "Êtes-vous sûr de vouloir quitter la salle d'attente ?",
+        simpleDialog: false,
       ),
     );
 
+    if (shouldExit == true) {
+      alertOtherPlayer();
+    }
+
     return shouldExit ?? false;
+  }
+
+  void alertOtherPlayer() async {
+    if (invitation != null) {
+      _webSocketService.sendInvitationCancel(invitation!);
+    }
+    _cancelTimer();
+
+    _timeoutTimer?.cancel();
+    _timeoutTimer = null;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MainMenuScreen(),
+      ),
+    );
   }
 
   @override
@@ -154,18 +147,14 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.black54,
+        backgroundColor: ColorsConstants.colorBg,
         appBar: AppBar(
-          title: const Text(
-            'Chess Waiting Room',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          backgroundColor: Colors.amber[700],
+          backgroundColor: ColorsConstants.colorBg,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: Image.asset(
+              'assets/icons8_arrow_back.png',
+              width: 30,
+            ),
             onPressed: () {
               _onWillPop();
             },
@@ -175,31 +164,21 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
+              const CustomImageSpinner(
+                size: 100.0,
+                duration: Duration(milliseconds: 2000),
+                type: false,
+              ),
+              const SizedBox(height: 20),
               Text(
                 invitation != null
                     ? (invitation!.toUsername != gameProvider.user.userName
-                        ? 'Waiting for ${invitation!.toUsername}'
-                        : 'Waiting for ${invitation!.fromUsername}')
-                    : 'No invitation available',
+                        ? 'En attente de ${invitation!.toUsername}'
+                        : 'En attente de ${invitation!.fromUsername}')
+                    : 'Aucune invitation disponible',
                 style: const TextStyle(
                   fontSize: 25,
                   color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 40),
-              AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale:
-                        1.0 + 0.3 * math.sin(_controller.value * 2 * math.pi),
-                    child: child,
-                  );
-                },
-                child: Icon(
-                  Icons.local_florist_rounded,
-                  size: 80,
-                  color: Colors.amber[700],
                 ),
               ),
             ],

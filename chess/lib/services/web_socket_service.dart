@@ -147,6 +147,7 @@ class WebSocketService {
 
               gameProvider.initializeMultiplayerGame(gameData);
               gameProvider.setInvitationCancel(value: false);
+              gameProvider.setIsloading(true);
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const GameBoardScreen(),
@@ -170,6 +171,7 @@ class WebSocketService {
                 Provider.of<GameProvider>(context, listen: false);
 
             if (!gameProvider.exitGame) {
+              gameProvider.setIsloading(false);
               gameProvider.setExitGame(value: true);
               gameProvider.setGameModel();
               gameProvider.setCurrentInvitation();
@@ -231,6 +233,7 @@ class WebSocketService {
                 Provider.of<GameProvider>(context, listen: false);
 
             if (context.mounted) {
+              gameProvider.setIsloading(false);
               String message = '${gameOverData['winner']} wins by timeout!';
               showDialogGameOver(context, message);
               gameProvider.setCurrentInvitation();
@@ -243,11 +246,12 @@ class WebSocketService {
         case 'game_over_checkmate':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
-            print('📦📦 Received Game Checkmate Data: $gameOverData');
+            // print('📦📦 Received Game Checkmate Data: $gameOverData');
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
             if (context.mounted) {
+              gameProvider.setIsloading(false);
               String message = '${gameOverData['message']}';
               showDialogGameOver(context, message,
                   score: gameOverData['score']);
