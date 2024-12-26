@@ -234,7 +234,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Determine board size based on screen constraints
           double boardSize = constraints.maxWidth;
 
           return Scaffold(
