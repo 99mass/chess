@@ -5,14 +5,20 @@ class CustomAlertDialog extends StatelessWidget {
   final VoidCallback? onOk;
   final String? titleMessage;
   final String? subtitleMessage;
-  final bool simpleDialog;
+  final int typeDialog;
+  final VoidCallback? onAccept;
+  final VoidCallback? onCancel;
+  final String? logo;
 
   const CustomAlertDialog({
     super.key,
     this.titleMessage,
     this.subtitleMessage,
-    this.simpleDialog = false,
+    this.typeDialog = 0,
     this.onOk,
+    this.onAccept,
+    this.onCancel,
+    this.logo,
   });
 
   @override
@@ -64,7 +70,7 @@ class CustomAlertDialog extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  if (simpleDialog)
+                  if (typeDialog == 0)
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop(false);
@@ -73,13 +79,13 @@ class CustomAlertDialog extends StatelessWidget {
                         }
                       },
                       child: const Text(
-                        "Ok",
+                        "Fermer",
                         style: TextStyle(
                             fontSize: 18, color: ColorsConstants.colorGreen),
                       ),
                     ),
                   //
-                  if (!simpleDialog)
+                  if (typeDialog == 1)
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop(false);
@@ -91,13 +97,42 @@ class CustomAlertDialog extends StatelessWidget {
                       ),
                     ),
                   //
-                  if (!simpleDialog)
+                  if (typeDialog == 1)
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop(true);
                       },
                       child: const Text(
                         "Quitter",
+                        style: TextStyle(
+                            fontSize: 18, color: ColorsConstants.colorBg3),
+                      ),
+                    ),
+                  if (typeDialog == 2)
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(false);
+                        if (onAccept != null) {
+                          onAccept!();
+                        }
+                      },
+                      child: const Text(
+                        "Accepter",
+                        style: TextStyle(
+                            fontSize: 18, color: ColorsConstants.colorGreen),
+                      ),
+                    ),
+                  //
+                  if (typeDialog == 2)
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(false);
+                        if (onCancel != null) {
+                          onCancel!();
+                        }
+                      },
+                      child: const Text(
+                        "Refuser",
                         style: TextStyle(
                             fontSize: 18, color: ColorsConstants.colorBg3),
                       ),
@@ -116,7 +151,7 @@ class CustomAlertDialog extends StatelessWidget {
             child: ClipRRect(
               borderRadius: const BorderRadius.all(Radius.circular(45)),
               child: Image.asset(
-                "assets/chess_logo.png",
+                logo ?? "assets/chess_logo.png",
                 width: 50,
                 height: 50,
               ),

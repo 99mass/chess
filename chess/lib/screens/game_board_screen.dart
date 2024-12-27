@@ -87,7 +87,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   void _onMove(Move move) async {
     _gameProvider = context.read<GameProvider>();
 
-    // Pour le mode ami (multiplayer)
+   
     if (_gameProvider.friendsMode) {
       bool result = await _gameProvider.makeSquaresMove(move, context: context);
 
@@ -139,14 +139,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     if (_gameProvider.computerMode &&
         _gameProvider.state.state == PlayState.theirTurn &&
         !_gameProvider.aiThinking) {
-      _triggerAiMove();
-    }
-  }
-
-  void letOtherPlayerPlayFirst2() async {
-    if (_gameProvider.computerMode &&
-        !_gameProvider.aiThinking &&
-        _gameProvider.playerColor == PlayerColor.black) {
       _triggerAiMove();
     }
   }
@@ -429,7 +421,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
             titleMessage: "Quitter la partie ?",
             subtitleMessage:
                 "Êtes-vous sûr de vouloir abandonner la partie en cours ?",
-                simpleDialog: false,
+                typeDialog: 1,
           );
         },
       );
@@ -471,7 +463,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
             titleMessage: "Quitter la partie ?",
             subtitleMessage:
                 "Êtes-vous sûr de vouloir abandonner la partie en cours ?",
-                simpleDialog: false,
+                  typeDialog: 1,
           );
         },
       );

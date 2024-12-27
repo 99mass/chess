@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:chess/screens/main_menu_screen.dart';
-import 'package:chess/utils/helper.dart';
+import 'package:chess/widgets/custom_alert_dialog.dart';
+import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:squares/squares.dart';
 import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/invitation_model.dart';
@@ -155,9 +155,8 @@ class WebSocketService {
               );
             } catch (e) {
               print('Error initializing game: $e');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Failed to start game try again')),
-              );
+              showCustomSnackBarBottom(
+                  context, 'Impossible de commencer la partie');
             }
           }
           break;
@@ -170,27 +169,24 @@ class WebSocketService {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
-            if (!gameProvider.exitGame) {
-              gameProvider.setIsloading(false);
-              gameProvider.setExitGame(value: true);
-              gameProvider.setGameModel();
-              gameProvider.setCurrentInvitation();
-              gameProvider.setFriendsMode(value: false);
-              gameProvider.setCompturMode(value: false);
+            gameProvider.setIsloading(false);
+            gameProvider.setIsGameEnd(value: true);
+            gameProvider.setOnWillPop(value: true);
+            gameProvider.setCurrentInvitation();
+            gameProvider.setFriendsMode(value: false);
 
+            if (context.mounted) {
               Future.microtask(() {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('$fromUsername has left the game.'),
-                  ));
-                  Timer(const Duration(seconds: 2), () {});
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MainMenuScreen(),
-                    ),
-                  );
-                }
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (BuildContext dialogContext) => CustomAlertDialog(
+                    titleMessage: "Game Over",
+                    subtitleMessage:
+                        'Vous avez gagné, $fromUsername a abandonné la partie.',
+                    typeDialog: 0,
+                  ),
+                );
               });
             }
           }
@@ -234,8 +230,21 @@ class WebSocketService {
 
             if (context.mounted) {
               gameProvider.setIsloading(false);
-              String message = '${gameOverData['winner']} wins by timeout!';
-              showDialogGameOver(context, message);
+              String message = gameOverData['winnerId'] != gameProvider.user.id
+                  ? 'Félicitations, vous avez gagné la partie !'
+                  : 'Dommage, vous avez perdu la partie !';
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext dialogContext) => CustomAlertDialog(
+                  titleMessage: "Game Over",
+                  subtitleMessage: message,
+                  typeDialog: 0,
+                  logo: gameOverData['winnerId'] != gameProvider.user.id
+                      ? 'assets/icons8_crown.png'
+                      : 'assets/icons8_lose.png',
+                ),
+              );
               gameProvider.setCurrentInvitation();
               gameProvider.setFriendsMode(value: false);
               gameProvider.setOnWillPop(value: true);
@@ -246,15 +255,34 @@ class WebSocketService {
         case 'game_over_checkmate':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
-            // print('📦📦 Received Game Checkmate Data: $gameOverData');
+            
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
             if (context.mounted) {
               gameProvider.setIsloading(false);
-              String message = '${gameOverData['message']}';
-              showDialogGameOver(context, message,
-                  score: gameOverData['score']);
+              String message = gameOverData['winnerId'] == gameProvider.user.id
+                  ? 'Félicitations, vous avez gagné la partie !'
+                  : 'Dommage, vous avez perdu la partie !';
+              message = gameOverData['winner'] == "Draw"
+                  ? "La partie se termine sur un match nul, bravo aux deux joueurs !"
+                  : message;
+
+              String logo = gameOverData['winnerId'] == gameProvider.user.id
+                  ? 'assets/icons8_crown.png'
+                  : 'assets/icons8_lose.png';
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext dialogContext) => CustomAlertDialog(
+                  titleMessage: "Game Over",
+                  subtitleMessage: message,
+                  typeDialog: 0,
+                  logo: gameOverData['winner'] == "Draw"
+                      ? 'assets/chess_logo.png'
+                      : logo,
+                ),
+              );
               gameProvider.setCurrentInvitation();
               gameProvider.setFriendsMode(value: false);
               gameProvider.setOnWillPop(value: true);
@@ -274,8 +302,8 @@ class WebSocketService {
       {required UserProfile currentUser, required UserProfile toUser}) {
     if (!_isConnected) {
       print('❌ WebSocket Disconnected');
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Network Error. Please reconnect.')));
+      showCustomSnackBarBottom(
+          context, 'Erreur de réseau. Veuillez vous reconnecter.');
       return;
     }
 
@@ -386,41 +414,27 @@ class WebSocketService {
                   gameProvider.removeInvitation(invitation);
                   gameProvider.setInvitationCancel(value: false);
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Time out Invitation canceled!'),
-                      duration: Duration(seconds: 5),
-                    ),
-                  );
+                  showCustomSnackBarBottom(context,
+                      'Invitation annulée pour cause de délai dépassé !');
                   if (Navigator.of(dialogContext).canPop()) {
                     Navigator.of(dialogContext).pop();
                   }
                 });
               }
-
-              return AlertDialog(
-                title: const Text('Game Invitation'),
-                content: Text(
-                    '${invitation.fromUsername} invites you to play chess'),
-                actions: [
-                  TextButton(
-                    child: const Text('Accept'),
-                    onPressed: () {
-                      acceptInvitation(currentUser, invitation);
-                      gameProvider.setInvitationCancel(value: false);
-                      Navigator.of(dialogContext).pop(true);
-                    },
-                  ),
-                  TextButton(
-                    child: const Text('Reject'),
-                    onPressed: () {
-                      gameProvider.setInvitationCancel(value: false);
-                      Navigator.of(dialogContext).pop();
-                      rejectInvitation(context, currentUser, invitation);
-                      gameProvider.removeInvitation(invitation);
-                    },
-                  ),
-                ],
+              return CustomAlertDialog(
+                titleMessage: "Invitation!",
+                subtitleMessage:
+                    '${invitation.fromUsername} vous invite à jouer une partie ?',
+                typeDialog: 2,
+                onAccept: () {
+                  acceptInvitation(currentUser, invitation);
+                  gameProvider.setInvitationCancel(value: false);
+                },
+                onCancel: () {
+                  rejectInvitation(context, currentUser, invitation);
+                  gameProvider.setInvitationCancel(value: false);
+                  gameProvider.removeInvitation(invitation);
+                },
               );
             },
           );
@@ -431,12 +445,8 @@ class WebSocketService {
 
   void _handleInvitationAccepted(
       BuildContext context, InvitationMessage invitation) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${invitation.fromUsername} accepted your invitation'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
+    showCustomSnackBarBottom(
+        context, '${invitation.fromUsername} a accepté votre invitation');
   }
 
   void leaveRoom(UserProfile currentUser) {

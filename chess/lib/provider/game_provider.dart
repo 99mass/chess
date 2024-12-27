@@ -11,8 +11,9 @@ import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
-import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
+import 'package:chess/widgets/custom_alert_dialog.dart';
+import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:square_bishop/square_bishop.dart';
 import 'package:squares/squares.dart';
@@ -129,26 +130,36 @@ class GameProvider extends ChangeNotifier {
     if (game.drawn || game.gameOver) {
       _isGameEnd = true;
 
-      String message = 'Game Over!';
-      String? score;
+      String message = '';
+      String logo = 'chess_logo.png';
 
       if (game.drawn) {
-        if (game.result == 'DrawnGameStalemate') {
-          message = 'Stalemate! The game is a draw.';
-          score = '1/2 - 1/2';
-        } else if (game.result == '1/2-1/2') {
-          message = 'Draw by agreement or insufficient material!';
-          score = '1/2 - 1/2';
+        if (game.result == 'DrawnGameStalemate' ||
+            game.result == 'DrawnGameRepetition' ||
+            game.result == 'DrawnGameBothRoyalsDead' ||
+            game.result == 'DrawnGameInsufficientMaterial' ||
+            game.result == '1/2-1/2' ||
+            game.result == 'DrawnGameElimination') {
+          message =
+              "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
         } else {
-          message = 'The game is a draw!';
-          score = '1/2 - 1/2';
+          message =
+              "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
         }
       } else if (game.winner == Squares.white) {
-        message = 'White wins!';
-        score = '1 - 0';
+        message = _playerColor == Squares.white
+            ? 'Vous avez gagner la partie, bravo!'
+            : 'L\'ordinateur à gagner la partie, dommage!';
+        logo = _playerColor == Squares.white
+            ? 'assets/icons8_crown.png'
+            : 'assets/icons8_lose.png';
       } else if (game.winner == Squares.black) {
-        message = 'Black wins!';
-        score = '0 - 1';
+        message = _playerColor == Squares.black
+            ? 'Vous avez gagner la partie, bravo!'
+            : 'L\'ordinateur à gagner la partie, dommage!';
+        logo = _playerColor == Squares.black
+            ? 'assets/icons8_crown.png'
+            : 'assets/icons8_lose.png';
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -156,7 +167,17 @@ class GameProvider extends ChangeNotifier {
           _isLoading = false;
           _friendsMode = false;
           _onWillPop = true;
-          showDialogGameOver(context, message, score: score);
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext dialogContext) => CustomAlertDialog(
+              titleMessage: "Game Over",
+              subtitleMessage: message,
+              typeDialog: 0,
+              logo: logo,
+            ),
+          );
         } catch (e) {
           print('Erreur lors de l\'affichage du dialog: $e');
         }
@@ -199,10 +220,6 @@ class GameProvider extends ChangeNotifier {
   }
 
   void setIsloading(bool value) {
-    // if (!_isLoading) {
-    //   _isLoading = value;
-    //   notifyListeners();
-    // }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _isLoading = value;
       notifyListeners();
@@ -340,43 +357,38 @@ class GameProvider extends ChangeNotifier {
     if (game.drawn || game.gameOver) {
       _isGameEnd = true;
 
-      String message = 'Game Over!';
-      String? score;
       String winner = '';
 
       if (game.drawn) {
-        if (game.result == 'DrawnGameStalemate') {
-          message = 'Stalemate! The game is a draw.';
-          score = '1/2 - 1/2';
-          winner = 'Draw';
-        } else if (game.result == '1/2-1/2') {
-          message = 'Draw by agreement or insufficient material!';
-          score = '1/2 - 1/2';
+        if (game.result == 'DrawnGameStalemate' ||
+            game.result == 'DrawnGameRepetition' ||
+            game.result == 'DrawnGameBothRoyalsDead' ||
+            game.result == 'DrawnGameInsufficientMaterial' ||
+            game.result == '1/2-1/2' ||
+            game.result == 'DrawnGameElimination') {
           winner = 'Draw';
         } else {
-          message = 'The game is a draw!';
-          score = '1/2 - 1/2';
           winner = 'Draw';
         }
       } else if (game.winner == Squares.white) {
-        message = 'White wins!';
-        score = '1 - 0';
         winner = 'White';
       } else if (game.winner == Squares.black) {
-        message = 'Black wins!';
-        score = '0 - 1';
         winner = 'Black';
       }
 
-      // Envoyer le message WebSocket pour notifier la fin de partie
       if (_gameModel != null) {
         final gameOverMessage = {
           'type': 'game_over_checkmate',
           'content': json.encode({
             'gameId': _gameModel!.gameId,
             'winner': winner,
-            'message': message,
-            'score': score,
+            'winnerId': _isWhiterPlayer
+                ? winner == 'White'
+                    ? _gameModel!.gameCreatorUid
+                    : _gameModel!.userId
+                : winner == 'Black'
+                    ? _gameModel!.gameCreatorUid
+                    : _gameModel!.userId,
           }),
         };
 
@@ -479,12 +491,10 @@ class GameProvider extends ChangeNotifier {
     removeInvitation(invitation);
     clearInvitations();
     setInvitationCancel(value: false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${invitation.fromUsername} rejected your invitation'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
+
+    showCustomSnackBarBottom(
+        context, '${invitation.fromUsername} a rejeter  votre invitation');
+
     Timer(const Duration(seconds: 2), () {});
     Navigator.pushReplacement(
         context,
@@ -500,12 +510,8 @@ class GameProvider extends ChangeNotifier {
 
   void handleInvitationAccepted(
       BuildContext context, InvitationMessage invitation) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${invitation.fromUsername} accepted your invitation'),
-        duration: const Duration(seconds: 5),
-      ),
-    );
+    showCustomSnackBarBottom(
+        context, '${invitation.fromUsername} a accepté  votre invitation');
   }
 
   void setInvitationCancel({required bool value}) {

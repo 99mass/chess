@@ -70,7 +70,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
             titleMessage: "Demande expirée !",
             subtitleMessage:
                 "La demande d'invitation a expirée. Veuillez réessayer.",
-            simpleDialog: true,
+            typeDialog: 0,
             onOk: () {
               _cancelTimer();
               Navigator.of(context).pop();
@@ -113,7 +113,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
         titleMessage: "Annuler l'invitation ?",
         subtitleMessage:
             "Êtes-vous sûr de vouloir quitter la salle d'attente ?",
-        simpleDialog: false,
+        typeDialog: 1,
       ),
     );
 

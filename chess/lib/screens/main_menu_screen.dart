@@ -119,7 +119,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           titleMessage: "Connection Error!",
           subtitleMessage:
               "Impossible de se connecter au serveur.\nVeuillez vérifier votre connexion internet et réessayer.",
-          simpleDialog: true,
+            typeDialog: 0,
         ),
       );
     }

@@ -13,7 +13,7 @@ import (
 // Configuration du WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true 
+		return true
 	},
 }
 
@@ -50,7 +50,6 @@ func (m *OnlineUsersManager) HandleConnection(w http.ResponseWriter, r *http.Req
 	}
 
 	safeConn := NewSafeConn(conn)
-	
 
 	// Ajouter la connexion
 	m.mutex.Lock()
@@ -179,10 +178,9 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 			}
 		case "game_over_checkmate":
 			var gameOverData struct {
-				GameID  string `json:"gameId"`
-				Winner  string `json:"winner"`
-				Message string `json:"message"`
-				Score   string `json:"score"`
+				GameID   string `json:"gameId"`
+				Winner   string `json:"winner"`
+				WinnerID string `json:"winnerId"`
 			}
 
 			if err := json.Unmarshal([]byte(message.Content), &gameOverData); err != nil {

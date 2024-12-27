@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'package:chess/constant/constants.dart';
 import 'package:chess/provider/game_provider.dart';
-import 'package:chess/utils/helper.dart';
+import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -63,13 +63,24 @@ class ChessTimer {
     gameProvider.setIsGameEnd(value: true);
     gameProvider.setOnWillPop(value: true);
     gameProvider.setFriendsMode(value: false);
-    gameProvider.setIsloading( false);
-    showDialogGameOver(
-        context, _whiteRemainingTime == 0 ? 'Black wins!' : 'White wins!',
-        onClose: () {
-      stop();
-      dispose();
-    });
+    gameProvider.setIsloading(false);
+
+    final String message = _whiteRemainingTime == 0
+        ? 'Les Noirs remportent la partie!'
+        : 'Les Blancs remportent la partie!';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) => CustomAlertDialog(
+        titleMessage: "Game Over",
+        subtitleMessage: message,
+        typeDialog: 0,
+        onOk: () {
+          stop();
+          dispose();
+        },
+      ),
+    );
     _activeTimer?.cancel();
     onTimeExpired?.call();
   }
