@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:async';
 
 import 'package:chess/constant/constants.dart';
 import 'package:chess/model/friend_model.dart';
@@ -6,6 +6,7 @@ import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_time_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
+import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:chess/screens/waiting_room_screen.dart';
 import 'package:provider/provider.dart';
@@ -21,41 +22,67 @@ class _FriendListScreenState extends State<FriendListScreen> {
   late GameProvider _gameProvider;
   late WebSocketService _webSocketService;
   List<UserProfile> onlineUsers = [];
+  bool _isInitializing = false;
+
+   StreamSubscription? _onlineUsersSubscription;
+   StreamSubscription? _invitationsSubscription;
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize WebSocket connection
     _webSocketService = WebSocketService();
-
     _gameProvider = Provider.of<GameProvider>(context, listen: false);
 
-    // Connect WebSocket
-    _webSocketService.connectWebSocket(context).then((_) {
-      _webSocketService
-          .sendMessage(json.encode({'type': 'request_online_users'}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeScreen();
+    });
+  }
+
+  Future<void> _initializeScreen() async {
+    setState(() => _isInitializing = true);
+
+    try {
+      bool connected = await _webSocketService.initializeConnection(context);
+      if (!connected && mounted) {
+        Navigator.pop(context);
+        showCustomSnackBarTop(context,
+            "Impossible de se connecter au serveur. Veuillez réessayer plus tard.");
+        return;
+      }
+
+      _setupSubscriptions();
+    } catch (e) {
+      print('Error initializing FriendListScreen: $e');
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
+    }
+  }
+
+  void _setupSubscriptions() {
+    _invitationsSubscription?.cancel();
+    _onlineUsersSubscription?.cancel();
+
+    // Setup new subscriptions
+    _onlineUsersSubscription =
+        _gameProvider.onlineUsersStream.listen((users) {}, onError: (error) {
+      print('Error in online users stream: $error');
     });
 
-    // Listen to online users stream
-    _gameProvider.onlineUsersStream.listen((users) {});
-
-    // Handle invitations
-    _gameProvider.invitationsStream.listen((invitations) {
+    _invitationsSubscription =
+        _gameProvider.invitationsStream.listen((invitations) {
       if (invitations.isNotEmpty) {
         final latestInvitation = invitations.last;
         _webSocketService.handleInvitationInteraction(
             context, _gameProvider.user, latestInvitation);
       }
     }, onError: (error) {
-      print('Erreur dans le flux d\'invitations : $error');
+      print('Error in invitations stream: $error');
     });
-  }
-
-  @override
-  void dispose() {
-    _gameProvider.clearInvitations();
-    super.dispose();
   }
 
   @override
@@ -75,65 +102,72 @@ class _FriendListScreenState extends State<FriendListScreen> {
           },
         ),
       ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            margin: const EdgeInsets.only(bottom: 20.0),
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/chess_logo.png'),
-                fit: BoxFit.contain,
+      body: _isInitializing
+          ? const Center(
+              child: CustomImageSpinner(
+                size: 30.0,
+                duration: Duration(milliseconds: 2000),
               ),
-            ),
-          ),
-          Expanded(
-            child: StreamBuilder<List<UserProfile>>(
-              stream: _gameProvider.onlineUsersStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CustomImageSpinner(
-                      size: 30.0,
-                      duration: Duration(milliseconds: 2000),
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  margin: const EdgeInsets.only(bottom: 20.0),
+                  decoration: const BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/chess_logo.png'),
+                      fit: BoxFit.contain,
                     ),
-                  );
-                }
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<List<UserProfile>>(
+                    stream: _gameProvider.onlineUsersStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CustomImageSpinner(
+                            size: 30.0,
+                            duration: Duration(milliseconds: 2000),
+                          ),
+                        );
+                      }
 
-                onlineUsers = [];
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return _buildEmptyMessage();
-                }
+                      onlineUsers = [];
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return _buildEmptyMessage();
+                      }
 
-                for (var user in snapshot.data!) {
-                  if (_gameProvider.user.id != user.id) {
-                    if (!user.isInRoom) {
-                      onlineUsers.add(user);
-                    }
-                  }
-                }
+                      for (var user in snapshot.data!) {
+                        if (_gameProvider.user.id != user.id) {
+                          if (!user.isInRoom) {
+                            onlineUsers.add(user);
+                          }
+                        }
+                      }
 
-                if (onlineUsers.isEmpty) {
-                  return _buildEmptyMessage();
-                }
+                      if (onlineUsers.isEmpty) {
+                        return _buildEmptyMessage();
+                      }
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  itemCount: onlineUsers.length,
-                  itemBuilder: (context, index) {
-                    return _buildFriendItem(context, onlineUsers[index]);
-                  },
-                );
-              },
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        itemCount: onlineUsers.length,
+                        itemBuilder: (context, index) {
+                          return _buildFriendItem(context, onlineUsers[index]);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -255,5 +289,13 @@ class _FriendListScreenState extends State<FriendListScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _onlineUsersSubscription?.cancel();
+    _invitationsSubscription?.cancel();
+    _gameProvider.clearInvitations();
+    super.dispose();
   }
 }

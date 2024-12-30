@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:chess/constant/constants.dart';
-import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
@@ -22,121 +22,70 @@ class WaitingRoomScreen extends StatefulWidget {
 class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late GameProvider _gameProvider;
   late WebSocketService _webSocketService;
   late InvitationMessage? invitation;
-  Timer? _timeoutTimer;
 
   @override
   void initState() {
     super.initState();
+    // Initialize WebSocket connection
+    _webSocketService = WebSocketService();
+    _gameProvider = context.read<GameProvider>();
 
-    _cancelTimer();
     // Initialize animation controller
     _controller = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     )..repeat(reverse: true);
 
-    // Get the InvitationService from GameProvider
-    final gameProvider = context.read<GameProvider>();
-    gameProvider.loadUser();
+    _gameProvider.loadUser();
 
-    invitation = gameProvider.currentInvitation;
-
-    // Initialize WebSocket connection
-    _webSocketService = WebSocketService();
-    _webSocketService.connectWebSocket(context);
-
-    // Start timeout timer
-    _timeoutTimer = Timer(const Duration(seconds: 30), _handleTimeout);
-  }
-
-  void _handleTimeout() {
-    if (mounted) {
-      _cancelTimer();
-
-      final gameProvider = context.read<GameProvider>();
-      if (invitation != null && gameProvider.gameModel == null) {
-        // Cancel invitation
-        _webSocketService.sendInvitationCancel(invitation!);
-      }
-
-      if (gameProvider.gameModel == null && !gameProvider.invitationCancel) {
-        // Show timeout message and navigate to main menu
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => CustomAlertDialog(
-            titleMessage: "Demande expirée !",
-            subtitleMessage:
-                "La demande d'invitation a expirée. Veuillez réessayer.",
-            typeDialog: 0,
-            onOk: () {
-              _cancelTimer();
-              Navigator.of(context).pop();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const MainMenuScreen(),
-                ),
-              );
-            },
-          ),
-        );
-      }
-    }
-  }
-
-  void _cancelTimer() {
-    if (_timeoutTimer != null) {
-      _timeoutTimer!.cancel();
-      _timeoutTimer = null;
-    }
-  }
-
-  @override
-  void dispose() {
-    _cancelTimer();
-    _controller.dispose();
-    _webSocketService.disposeInvitationStream();
-    _timeoutTimer?.cancel();
-    super.dispose();
+    invitation = _gameProvider.currentInvitation;
   }
 
   Future<bool> _onWillPop() async {
-    _cancelTimer();
-
-    // Show confirmation dialog
-    bool? shouldExit = await showDialog<bool>(
-      context: context,
-      builder: (context) => const CustomAlertDialog(
-        titleMessage: "Annuler l'invitation ?",
-        subtitleMessage:
-            "Êtes-vous sûr de vouloir quitter la salle d'attente ?",
-        typeDialog: 1,
-      ),
-    );
-
-    if (shouldExit == true) {
-      alertOtherPlayer();
+    if (_gameProvider.invitationRejct) {
+      _gameProvider.setInvitationRejct(value: false);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const FriendListScreen(),
+        ),
+      );
+      return true;
     }
 
-    return shouldExit ?? false;
+    if (!_gameProvider.invitationRejct) {
+      // Show confirmation dialog
+      bool? shouldExit = await showDialog<bool>(
+        context: context,
+        builder: (context) => const CustomAlertDialog(
+          titleMessage: "Annuler l'invitation ?",
+          subtitleMessage:
+              "Êtes-vous sûr de vouloir quitter la salle d'attente ?",
+          typeDialog: 1,
+        ),
+      );
+
+      if (shouldExit == true) {
+        alertOtherPlayer();
+      }
+      return shouldExit ?? false;
+    }
+
+    return false;
   }
 
   void alertOtherPlayer() async {
     if (invitation != null) {
       _webSocketService.sendInvitationCancel(invitation!);
     }
-    _cancelTimer();
-
-    _timeoutTimer?.cancel();
-    _timeoutTimer = null;
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => const MainMenuScreen(),
+        builder: (context) => const FriendListScreen(),
       ),
     );
   }
@@ -144,6 +93,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
   @override
   Widget build(BuildContext context) {
     final gameProvider = context.read<GameProvider>();
+    // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
@@ -186,5 +136,11 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }

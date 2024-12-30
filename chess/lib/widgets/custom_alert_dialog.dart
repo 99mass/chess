@@ -70,11 +70,11 @@ class CustomAlertDialog extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  if (typeDialog == 0)
+                  if (typeDialog == 0 || typeDialog == 3)
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop(false);
-                        if (onOk != null) {
+                        if (onOk != null && typeDialog == 0) {
                           onOk!();
                         }
                       },
@@ -97,10 +97,13 @@ class CustomAlertDialog extends StatelessWidget {
                       ),
                     ),
                   //
-                  if (typeDialog == 1)
+                  if (typeDialog == 1 || typeDialog == 3)
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pop(true);
+                        if (onOk != null && typeDialog == 3) {
+                          onOk!();
+                        }
                       },
                       child: const Text(
                         "Quitter",
@@ -108,13 +111,14 @@ class CustomAlertDialog extends StatelessWidget {
                             fontSize: 18, color: ColorsConstants.colorBg3),
                       ),
                     ),
+                    // 
                   if (typeDialog == 2)
                     TextButton(
                       onPressed: () {
-                        Navigator.of(context).pop(false);
                         if (onAccept != null) {
                           onAccept!();
                         }
+                        Navigator.of(context).pop();
                       },
                       child: const Text(
                         "Accepter",
@@ -126,10 +130,10 @@ class CustomAlertDialog extends StatelessWidget {
                   if (typeDialog == 2)
                     TextButton(
                       onPressed: () {
-                        Navigator.of(context).pop(false);
                         if (onCancel != null) {
                           onCancel!();
                         }
+                        Navigator.of(context).pop();
                       },
                       child: const Text(
                         "Refuser",

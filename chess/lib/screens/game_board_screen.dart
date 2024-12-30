@@ -10,6 +10,7 @@ import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/stockfish_uic_command.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
+import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:squares/squares.dart';
@@ -28,17 +29,16 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   late Stockfish? stockfish;
   late ChessTimer _chessTimer;
   StreamSubscription<String>? _stockfishSubscription;
+  StreamSubscription? _onlineUsersSubscription;
+  StreamSubscription? _invitationsSubscription;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _gameProvider = context.read<GameProvider>();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _webSocketService = WebSocketService();
-      _webSocketService.connectWebSocket(context);
-    });
+    _webSocketService = WebSocketService();
+    _gameProvider = context.read<GameProvider>();
 
     stockfish = _gameProvider.computerMode ? StockfishInstance.instance : null;
     _gameProvider.resetGame(newGame: false);
@@ -67,6 +67,50 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         _gameProvider.setIsloading(true);
         letOtherPlayerPlayFirst();
       }
+
+      _initializeServices();
+    });
+  }
+
+  Future<void> _initializeServices() async {
+    try {
+      if (_gameProvider.friendsMode) {
+        bool connected = await _webSocketService.initializeConnection(context);
+        if (!connected && mounted) {
+          Navigator.pop(context);
+          showCustomSnackBarTop(context,
+              "Impossible de se connecter au serveur. Veuillez réessayer plus tard.");
+          return;
+        }
+        _setupSubscriptions();
+      }
+    } catch (e) {
+      print('Error initializing FriendListScreen: $e');
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } finally {}
+  }
+
+  void _setupSubscriptions() {
+    // Setup new subscriptions
+    _invitationsSubscription?.cancel();
+    _onlineUsersSubscription?.cancel();
+
+    _onlineUsersSubscription =
+        _gameProvider.onlineUsersStream.listen((users) {}, onError: (error) {
+      print('Error in online users stream: $error');
+    });
+
+    _invitationsSubscription =
+        _gameProvider.invitationsStream.listen((invitations) {
+      if (invitations.isNotEmpty) {
+        final latestInvitation = invitations.last;
+        _webSocketService.handleInvitationInteraction(
+            context, _gameProvider.user, latestInvitation);
+      }
+    }, onError: (error) {
+      print('Error in invitations stream: $error');
     });
   }
 
@@ -87,7 +131,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
   void _onMove(Move move) async {
     _gameProvider = context.read<GameProvider>();
 
-   
     if (_gameProvider.friendsMode) {
       bool result = await _gameProvider.makeSquaresMove(move, context: context);
 
@@ -164,7 +207,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     // Envoyer les commandes à Stockfish
     stockfish!.stdin =
         '${StockfishUicCommand.position} ${_gameProvider.getPositionFen()}';
-    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 1000}';
+    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 500}';
 
     // Désabonner les anciens écouteurs s'il y en a
     _stockfishSubscription?.cancel();
@@ -204,6 +247,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       if (stockfish != null) {
         stockfish!.stdin = StockfishUicCommand.stop;
         _webSocketService.disposeInvitationStream();
+        _gameProvider.clearInvitations();
         _stockfishSubscription?.cancel();
         stockfish = null;
       }
@@ -407,6 +451,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     _gameProvider.setIsloading(false);
     // Dispose of WebSocket invitation stream
     _webSocketService.disposeInvitationStream();
+    _gameProvider.clearInvitations();
 
     // Reset game state
     _gameProvider.resetGame(newGame: true);
@@ -421,7 +466,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
             titleMessage: "Quitter la partie ?",
             subtitleMessage:
                 "Êtes-vous sûr de vouloir abandonner la partie en cours ?",
-                typeDialog: 1,
+            typeDialog: 1,
           );
         },
       );
@@ -463,7 +508,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
             titleMessage: "Quitter la partie ?",
             subtitleMessage:
                 "Êtes-vous sûr de vouloir abandonner la partie en cours ?",
-                  typeDialog: 1,
+            typeDialog: 1,
           );
         },
       );
@@ -630,6 +675,10 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     _gameProvider.setIsloading(false);
     _webSocketService.disposeInvitationStream();
     _gameProvider.resetGame(newGame: true);
+
+    _onlineUsersSubscription?.cancel();
+    _invitationsSubscription?.cancel();
+    _gameProvider.clearInvitations();
 
     super.dispose();
   }

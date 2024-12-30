@@ -9,7 +9,7 @@ import 'package:chess/model/friend_model.dart';
 import 'package:chess/model/game_model.dart';
 import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/time_provider.dart';
-import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
@@ -488,30 +488,21 @@ class GameProvider extends ChangeNotifier {
 
   void handleInvitationRejection(
       BuildContext context, InvitationMessage invitation) {
-    removeInvitation(invitation);
-    clearInvitations();
-    setInvitationCancel(value: false);
-
     showCustomSnackBarBottom(
         context, '${invitation.fromUsername} a rejeter  votre invitation');
 
-    Timer(const Duration(seconds: 2), () {});
     Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
+          builder: (context) => const FriendListScreen(),
         ));
   }
 
-  void handleInvitationCancellation(
-      BuildContext context, InvitationMessage invitation) {
-    removeInvitation(invitation);
-  }
-
-  void handleInvitationAccepted(
-      BuildContext context, InvitationMessage invitation) {
-    showCustomSnackBarBottom(
-        context, '${invitation.fromUsername} a accepté  votre invitation');
+  bool _invitationRejct = false;
+  bool get invitationRejct => _invitationRejct;
+  void setInvitationRejct({required bool value}) {
+    _invitationRejct = value;
+    notifyListeners();
   }
 
   void setInvitationCancel({required bool value}) {

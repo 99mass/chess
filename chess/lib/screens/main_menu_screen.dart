@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/friend_list_screen.dart';
+import 'package:chess/screens/login_screen.dart';
+import 'package:chess/services/user_service.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
+import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chess/provider/game_provider.dart';
@@ -21,121 +25,179 @@ class MainMenuScreen extends StatefulWidget {
 class _MainMenuScreenState extends State<MainMenuScreen> {
   late WebSocketService _webSocketService;
   late GameProvider _gameProvider;
-  bool _isConnecting = false;
-  int _connectionAttempts = 0;
-  static const int _maxConnectionAttempts = 10;
-  static const Duration _connectionDelay = Duration(seconds: 3);
+  bool _isInitializing = false;
+  Timer? _reconnectTimer;
+  StreamSubscription? _invitationsSubscription;
+  StreamSubscription? _onlineUsersSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    // Initialiser le service WebSocket
+    // Initialize websocket service
     _webSocketService = WebSocketService();
-
-    // Forcer la connexion WebSocket
-    _forceWebSocketConnection();
-
     _gameProvider = Provider.of<GameProvider>(context, listen: false);
 
-    // Charger l'utilisateur
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeServices();
+    });
+  }
+
+  Future<void> _initializeServices() async {
+    setState(() => _isInitializing = true);
+
+    try {
+      // Initialize game state
+      _initializeGameState();
+
+      // Initialize WebSocket
+      bool connected = await _webSocketService.initializeConnection(context);
+      if (!connected) {
+        if (mounted) {
+          showCustomSnackBarTop(context,
+              "Connexion au serveur impossible. Certaines fonctionnalités peuvent être indisponibles.");
+        }
+      }
+
+      // Setup subscriptions
+      _setupSubscriptions();
+    } catch (e) {
+      print('Error during initialization: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
+    }
+  }
+
+  void _initializeGameState() {
     _gameProvider.loadUser();
 
-    // Réinitialiser l'état de sortie de jeu si nécessaire
     if (_gameProvider.exitGame) {
       _gameProvider.setExitGame(value: false);
     }
-
     _gameProvider.setCompturMode(value: false);
     _gameProvider.setFriendsMode(value: false);
     _gameProvider.setGameModel();
     _gameProvider.setCurrentInvitation();
+  }
 
-    // Gérer les invitations
-    _gameProvider.invitationsStream.listen((invitations) {
+  void _setupSubscriptions() {
+    // Cancel existing subscriptions if any
+    _invitationsSubscription?.cancel();
+    _onlineUsersSubscription?.cancel();
+
+    // Setup new subscriptions
+    _onlineUsersSubscription =
+        _gameProvider.onlineUsersStream.listen((users) {}, onError: (error) {
+      print('Error in online users stream: $error');
+    });
+
+    _invitationsSubscription =
+        _gameProvider.invitationsStream.listen((invitations) {
       if (invitations.isNotEmpty) {
         final latestInvitation = invitations.last;
         _webSocketService.handleInvitationInteraction(
             context, _gameProvider.user, latestInvitation);
       }
     }, onError: (error) {
-      print('Erreur dans le flux d\'invitations : $error');
-      _forceWebSocketConnection();
+      print('Error in invitations stream: $error');
     });
-
-    // Gérer les utilisateurs en ligne
-    _gameProvider.onlineUsersStream.listen((users) {});
   }
 
-  void _forceWebSocketConnection() async {
-    // Empêcher les tentatives de connexion simultanées
-    if (_isConnecting) return;
+  void _handleComputerModeClick() {
+    _gameProvider.setCompturMode(value: true);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const GameTimeScreen(),
+      ),
+    );
+  }
 
-    setState(() {
-      _isConnecting = true;
-    });
-
-    while (_connectionAttempts < _maxConnectionAttempts) {
-      try {
-        // print(
-        //     'Tentative de connexion WebSocket (Tentative ${_connectionAttempts + 1})');
-
-        await _webSocketService.connectWebSocket(context);
-
-        // Si la connexion est réussie
-        if (_webSocketService.isConnected) {
-          setState(() {
-            _isConnecting = false;
-            _connectionAttempts = 0;
-          });
-          return;
+  void _handleFriendsModeClick() async {
+    if (!_webSocketService.isConnected) {
+      // Tentative de reconnexion avant d'accéder aux fonctionnalités en ligne
+      bool connected = await _webSocketService.initializeConnection(context);
+      if (!connected) {
+        if (mounted) {
+          showCustomSnackBarTop(context,
+              "Connexion impossible. Veuillez vérifier votre connexion internet.");
         }
-
-        // Incrémenter les tentatives et attendre avant la prochaine
-        _connectionAttempts++;
-        await Future.delayed(_connectionDelay);
-      } catch (e) {
-        print('Échec de la tentative de connexion : $e');
-        _connectionAttempts++;
-        await Future.delayed(_connectionDelay);
+        return;
       }
     }
-
-    // Si toutes les tentatives de connexion échouent
+    _gameProvider.setFriendsMode(value: true);
     if (mounted) {
-      setState(() {
-        _isConnecting = false;
-      });
-      _showFinalConnectionFailureDialog();
-    }
-  }
-
-  void _showFinalConnectionFailureDialog() {
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const CustomAlertDialog(
-          titleMessage: "Connection Error!",
-          subtitleMessage:
-              "Impossible de se connecter au serveur.\nVeuillez vérifier votre connexion internet et réessayer.",
-            typeDialog: 0,
-        ),
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const FriendListScreen()),
       );
     }
   }
 
-  @override
-  void dispose() {
-    _gameProvider.clearInvitations();
-    super.dispose();
+  Future<void> _logOut() async {
+    final user = await SharedPreferencesStorage.instance.getUserLocally();
+
+    try {
+      bool response = await UserService.disconnectUser(user!.userName);
+
+      if (response == true) {
+        await SharedPreferencesStorage.instance.deleteUserLocally();
+        showCustomSnackBarTop(context, "Vous avez été déconnect  avec succées");
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+          ),
+        );
+      } else {
+        showCustomSnackBarTop(
+            context, "Une erreur s'est produite, veuillez reessayer!");
+      }
+    } on AuthException catch (e) {
+      print('Erreur lors de la déconnexion: ${e.message}');
+      showCustomSnackBarTop(
+          context, "Erreur lors de la déconnexion: ${e.message}");
+    } catch (e) {
+      print('Erreur inattendue: $e');
+      showCustomSnackBarTop(context, "Erreur inattendue: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final gameProvider = context.read<GameProvider>();
-
     return Scaffold(
+      backgroundColor: ColorsConstants.colorBg,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: ColorsConstants.colorBg,
+        leading: null,
+        actions: [
+          IconButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                barrierDismissible: true,
+                builder: (context) => CustomAlertDialog(
+                  titleMessage: "Avertissement!",
+                  subtitleMessage:
+                      "Etes-vous sur de vouloir quitter l'application?",
+                  typeDialog: 3,
+                  onOk: () => _logOut(),
+                ),
+              );
+            },
+            style: IconButton.styleFrom(
+                padding: const EdgeInsets.only(top: 20.0, right: 20.0)),
+            icon: Image.asset(
+              'assets/icons8_logout.png',
+              width: 30,
+            ),
+          ),
+        ],
+      ),
       body: Container(
         width: double.infinity,
         decoration: const BoxDecoration(
@@ -145,12 +207,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Show connection status
-            if (_isConnecting)
+            // if (_isConnecting && !_webSocketService.isConnected)
+            if (_isInitializing)
               const Column(
                 children: [
                   CustomImageSpinner(
                     size: 30.0,
-                    duration: Duration(milliseconds: 2000),
+                    duration: Duration(seconds: 2),
                   ),
                   SizedBox(height: 20),
                   Text(
@@ -182,33 +245,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 _buildMenuButton(
                   'vs Ordinateur',
                   'icons8_ai.png',
-                  onTap: _webSocketService.isConnected
-                      ? () {
-                          gameProvider.setCompturMode(value: true);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const GameTimeScreen(),
-                            ),
-                          );
-                        }
-                      : null,
+                  onTap: _handleComputerModeClick,
                 ),
                 const SizedBox(height: 15),
                 _buildMenuButton(
                   'vs Amis',
                   'icons8_handshake.png',
-                  onTap: _webSocketService.isConnected
-                      ? () {
-                          gameProvider.setFriendsMode(value: true);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const FriendListScreen(),
-                            ),
-                          );
-                        }
-                      : null,
+                  onTap: _handleFriendsModeClick,
                 ),
               ],
             ),
@@ -250,5 +293,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _invitationsSubscription?.cancel();
+    _onlineUsersSubscription?.cancel();
+    _reconnectTimer?.cancel();
+    _gameProvider.clearInvitations();
+    super.dispose();
   }
 }

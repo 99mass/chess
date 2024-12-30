@@ -15,6 +15,7 @@ func main() {
 
 	router.HandleFunc("/users/create", service.CreateUserHandler(userStore)).Methods("POST")
 	router.HandleFunc("/users/get", service.GetUserHandler(userStore)).Methods("GET")
+	router.HandleFunc("/users/disconnect", service.DisconnectUserHandler(userStore, onlineUsersManager)).Methods("DELETE")
 
 	// Routes WebSocket
 	router.HandleFunc("/ws", onlineUsersManager.HandleConnection)

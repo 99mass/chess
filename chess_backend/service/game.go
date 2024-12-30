@@ -28,6 +28,7 @@ type ChessGameRoom struct {
 	IsGameOver     bool   `json:"is_game_over"`
 	Moves          []Move `json:"moves"`
 	Timer          *ChessTimer
+	InvitationTimeout *InvitationTimeout
 }
 
 // You'll need to define the Move struct as well
@@ -206,17 +207,24 @@ func (m *OnlineUsersManager) RemoveUserFromRoom(username string) ([]OnlineUser, 
 }
 
 func (room *ChessGameRoom) BroadcastMessage(message WebSocketMessage) {
-	room.mutex.RLock()
-	connections := make(map[string]*SafeConn)
-	for username, conn := range room.Connections {
-		connections[username] = conn
-	}
-	room.mutex.RUnlock()
+    room.mutex.RLock()
+    connections := make(map[string]*SafeConn)
+    for username, conn := range room.Connections {
+        connections[username] = conn
+    }
+    room.mutex.RUnlock()
 
-	for _, conn := range connections {
-		err := conn.WriteJSON(message)
-		if err != nil {
-			log.Printf("Error broadcasting message: %v", err)
-		}
-	}
+    for username, conn := range connections {
+        err := conn.WriteJSON(message)
+        if err != nil {
+            log.Printf("Error broadcasting message to %s: %v", username, err)
+            // Si la connexion est fermée, supprimer l'utilisateur de la room
+            if err.Error() == "write: broken pipe" || 
+               err.Error() == "use of closed network connection" {
+                room.mutex.Lock()
+                delete(room.Connections, username)
+                room.mutex.Unlock()
+            }
+        }
+    }
 }

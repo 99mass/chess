@@ -70,14 +70,37 @@ func (m *OnlineUsersManager) HandleConnection(w http.ResponseWriter, r *http.Req
 
 // Gérer les messages du client
 func (m *OnlineUsersManager) handleClientConnection(username string, conn *websocket.Conn) {
+
 	defer func() {
-		// Nettoyer à la déconnexion
+		// Trouver et nettoyer la room si l'utilisateur y était
+		var roomID string
+		m.roomManager.mutex.RLock()
+		for _, room := range m.roomManager.rooms {
+			if room.WhitePlayer.Username == username || room.BlackPlayer.Username == username {
+				roomID = room.RoomID
+				break
+			}
+		}
+		m.roomManager.mutex.RUnlock()
+
+		if roomID != "" {
+			// Notifier l'autre joueur et nettoyer la room
+			invitation := InvitationMessage{
+				Type:         RoomLeave,
+				FromUsername: username,
+				RoomID:       roomID,
+			}
+			m.handleInvitation(invitation)
+		}
+
+		// Nettoyer la connexion
 		m.mutex.Lock()
 		delete(m.connections, username)
 		m.mutex.Unlock()
 
 		// Mettre à jour le statut hors ligne
 		m.userStore.UpdateUserOnlineStatus(username, false, false)
+		m.userStore.UpdateUserRoomStatus(username, false)
 
 		// Notifier les autres clients
 		m.broadcastOnlineUsers()
@@ -232,7 +255,6 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 }
 
 func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) error {
-
 	m.mutex.RLock()
 	_, fromExists := m.connections[invitation.FromUsername]
 	toConn, toExists := m.connections[invitation.ToUsername]
@@ -250,104 +272,137 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 
 	switch invitation.Type {
 	case InvitationSend:
+		// Créer une room temporaire pour l'invitation
+		room := &ChessGameRoom{
+			RoomID: GenerateUniqueID(),
+			WhitePlayer: OnlineUser{
+				ID:       invitation.FromUserID,
+				Username: invitation.FromUsername,
+			},
+			BlackPlayer: OnlineUser{
+				ID:       invitation.ToUserID,
+				Username: invitation.ToUsername,
+			},
+			Connections: make(map[string]*SafeConn),
+			Status:      RoomStatusPending,
+		}
 
-		// Envoyer l'invitation au destinataire
-		toConn, exists := m.connections[invitation.ToUsername]
-		if exists {
-			err := toConn.WriteJSON(WebSocketMessage{
-				Type:    "invitation",
-				Content: string(mustJson(invitation)),
-			})
-			if err != nil {
-				log.Printf("❌ Error Sending Invitation: %v", err)
-				return err
+		// Créer et démarrer le timer de 30 secondes
+		timeout := NewInvitationTimeout(room.RoomID, 30*time.Second, func() {
+			// Fonction appelée quand le timeout expire
+			// log.Printf("Invitation timeout for room %s", room.RoomID)
+
+			// Créer le message de timeout
+			timeoutMsg := WebSocketMessage{
+				Type: "invitation_timeout",
+				Content: string(mustJson(InvitationMessage{
+					Type:         InvitationCancel,
+					FromUserID:   invitation.FromUserID,
+					FromUsername: invitation.FromUsername,
+					ToUserID:     invitation.ToUserID,
+					ToUsername:   invitation.ToUsername,
+					RoomID:       room.RoomID,
+				})),
 			}
-		} else {
-			log.Printf("❌ Recipient %s not connected", invitation.ToUsername)
+
+			// Envoyer le message aux deux joueurs
+			if fromConn, exists := m.connections[invitation.FromUsername]; exists {
+				fromConn.WriteJSON(timeoutMsg)
+			}
+			if toConn, exists := m.connections[invitation.ToUsername]; exists {
+				toConn.WriteJSON(timeoutMsg)
+			}
+
+			// Nettoyer la room
+			m.roomManager.RemoveRoom(room.RoomID)
+		})
+
+		room.InvitationTimeout = timeout
+		timeout.Start()
+
+		// Stocker la room temporaire
+		m.roomManager.mutex.Lock()
+		m.roomManager.rooms[room.RoomID] = room
+		m.roomManager.mutex.Unlock()
+
+		// Envoyer l'invitation
+		invitation.RoomID = room.RoomID
+		err := toConn.WriteJSON(WebSocketMessage{
+			Type:    "invitation",
+			Content: string(mustJson(invitation)),
+		})
+		if err != nil {
+			log.Printf("Error sending invitation: %v", err)
+			return err
 		}
+
 	case InvitationAccept:
-		// Générer un ID de room
-		if invitation.RoomID == "" {
-			invitation.RoomID = GenerateUniqueID()
-		}
-
-		m.roomManager.CreateRoom(invitation)
-
-		// Retrouver la room
+		// Récupérer la room temporaire
 		room, exists := m.roomManager.GetRoom(invitation.RoomID)
 		if !exists {
 			return fmt.Errorf("room not found")
 		}
 
+		// Arrêter le timer d'invitation
+		if room.InvitationTimeout != nil {
+			room.InvitationTimeout.Stop()
+		}
+
+		// Créer la nouvelle room de jeu
+		gameRoom := m.roomManager.CreateRoom(invitation)
+
 		// Mettre à jour le statut des joueurs
 		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, true)
 		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, true)
 
-		// Update room status
-		room.Status = RoomStatusInGame
+		// Initialiser l'état du jeu
+		gameRoom.PositionFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+		gameRoom.IsWhitesTurn = true
+		gameRoom.IsGameOver = false
 
-		// Initialiser l'état du jeu de base
-		room.PositionFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-		room.IsWhitesTurn = true
-		room.IsGameOver = false
-
-		// Message de base pour les deux joueurs
+		// Préparer les états de jeu pour les deux joueurs
 		baseGameState := map[string]interface{}{
 			"gameId":         invitation.RoomID,
-			"gameCreatorUid": invitation.ToUserID,
-			"positonFen":     room.PositionFEN,
+			"gameCreatorUid": invitation.FromUserID,
+			"positonFen":     gameRoom.PositionFEN,
 			"winnerId":       "",
-			"whitesTime":     room.WhitesTime,
-			"blacksTime":     room.BlacksTime,
-			"isWhitesTurn":   room.IsWhitesTurn,
-			"isGameOver":     room.IsGameOver,
-			"moves":          room.Moves,
+			"whitesTime":     gameRoom.WhitesTime,
+			"blacksTime":     gameRoom.BlacksTime,
+			"isWhitesTurn":   gameRoom.IsWhitesTurn,
+			"isGameOver":     gameRoom.IsGameOver,
+			"moves":          gameRoom.Moves,
 		}
 
-		// Préparer le message pour le créateur du jeu
-		creatorGameState := make(map[string]interface{})
-		for k, v := range baseGameState {
-			creatorGameState[k] = v
-		}
-		creatorGameState["userId"] = invitation.FromUserID
-		creatorGameState["opponentUsername"] = invitation.ToUsername
+		// États spécifiques pour chaque joueur
+		creatorGameState := copyAndAddUserInfo(baseGameState, invitation.FromUserID, invitation.ToUsername)
+		inviteeGameState := copyAndAddUserInfo(baseGameState, invitation.ToUserID, invitation.FromUsername)
 
-		// Préparer le message pour l'invité
-		inviteeGameState := make(map[string]interface{})
-		for k, v := range baseGameState {
-			inviteeGameState[k] = v
-		}
-		inviteeGameState["userId"] = invitation.ToUserID
-		inviteeGameState["opponentUsername"] = invitation.FromUsername
-
-		// Envoyer les messages appropriés aux deux joueurs
+		// Envoyer les messages aux joueurs
 		fromConn, fromExists := m.connections[invitation.FromUsername]
-		toConn, toExists := m.connections[invitation.ToUsername]
-
 		if fromExists {
-			room.AddConnection(invitation.FromUsername, fromConn)
-			err := fromConn.WriteJSON(WebSocketMessage{
+			gameRoom.AddConnection(invitation.FromUsername, fromConn)
+			fromConn.WriteJSON(WebSocketMessage{
 				Type:    "game_start",
 				Content: string(mustJson(creatorGameState)),
 			})
-			if err != nil {
-				log.Printf("Error sending game start to creator: %v", err)
-			}
 		}
 
 		if toExists {
-			room.AddConnection(invitation.ToUsername, toConn)
-			err := toConn.WriteJSON(WebSocketMessage{
+			gameRoom.AddConnection(invitation.ToUsername, toConn)
+			toConn.WriteJSON(WebSocketMessage{
 				Type:    "game_start",
 				Content: string(mustJson(inviteeGameState)),
 			})
-			if err != nil {
-				log.Printf("Error sending game start to invitee: %v", err)
-			}
 		}
-	case InvitationReject:
 
-		// Vérifier les connexions
+	case InvitationReject:
+		// Récupérer et nettoyer la room temporaire
+		room, exists := m.roomManager.GetRoom(invitation.RoomID)
+		if exists && room.InvitationTimeout != nil {
+			room.InvitationTimeout.Stop()
+		}
+		m.roomManager.RemoveRoom(invitation.RoomID)
+
 		fromConn, fromExists := m.connections[invitation.ToUsername]
 		_, toExists := m.connections[invitation.FromUsername]
 
@@ -367,14 +422,19 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 
 	case InvitationCancel:
+		// Récupérer et nettoyer la room temporaire
+		room, exists := m.roomManager.GetRoom(invitation.RoomID)
+		if exists && room.InvitationTimeout != nil {
+			room.InvitationTimeout.Stop()
+		}
+		m.roomManager.RemoveRoom(invitation.RoomID)
 
-		// Notifier le destinataire de l'annulation
-		err := toConn.WriteJSON(WebSocketMessage{
-			Type:    "invitation_cancel",
-			Content: string(mustJson(invitation)),
-		})
-		if err != nil {
-			log.Printf("Error sending cancellation notification: %v", err)
+		// Notifier le destinataire
+		if toExists {
+			toConn.WriteJSON(WebSocketMessage{
+				Type:    "invitation_cancel",
+				Content: string(mustJson(invitation)),
+			})
 		}
 
 	case RoomLeave:
@@ -406,10 +466,20 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		}
 		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
 		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
-
 	}
 
 	return nil
+}
+
+// Fonction utilitaire pour copier l'état de base et ajouter les informations spécifiques à l'utilisateur
+func copyAndAddUserInfo(baseState map[string]interface{}, userId, opponentUsername string) map[string]interface{} {
+	newState := make(map[string]interface{})
+	for k, v := range baseState {
+		newState[k] = v
+	}
+	newState["userId"] = userId
+	newState["opponentUsername"] = opponentUsername
+	return newState
 }
 
 func (us *UserStore) UpdateUserRoomStatus(username string, isInRoom bool) error {

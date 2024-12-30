@@ -201,6 +201,64 @@ func GetUserHandler(userStore *UserStore) http.HandlerFunc {
 	}
 }
 
+func (us *UserStore) DeleteUser(username string) error {
+	us.mutex.Lock()
+	defer us.mutex.Unlock()
+
+	if _, exists := us.Users[username]; !exists {
+		return fmt.Errorf("user not found")
+	}
+
+	delete(us.Users, username)
+
+	return us.Save()
+}
+
+// Créer un nouveau handler pour la déconnexion
+func DisconnectUserHandler(userStore *UserStore, onlineUsersManager *OnlineUsersManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		username := r.URL.Query().Get("username")
+		if username == "" {
+			http.Error(w, "Username is required", http.StatusBadRequest)
+			return
+		}
+
+		// Vérifier si l'utilisateur existe
+		user, err := userStore.GetUser(username)
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+
+		// Fermer la connexion WebSocket si elle existe
+		onlineUsersManager.mutex.Lock()
+		if conn, exists := onlineUsersManager.connections[username]; exists {
+			conn.conn.Close()
+			delete(onlineUsersManager.connections, username)
+		}
+		onlineUsersManager.mutex.Unlock()
+
+		// Mettre à jour le statut en ligne et dans la room
+		userStore.UpdateUserOnlineStatus(username, false, false)
+
+		// Supprimer l'utilisateur
+		if err := userStore.DeleteUser(username); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to delete user: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Notifier les autres utilisateurs que cet utilisateur est déconnecté
+		onlineUsersManager.broadcastOnlineUsers()
+
+		// Renvoyer une réponse de succès
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": fmt.Sprintf("User %s successfully disconnected and deleted", user.UserName),
+		})
+	}
+}
+
 func SetupUserStore() *UserStore {
 	userStore := NewUserStore()
 	if err := userStore.Load(); err != nil {

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as Math;
+
+import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:squares/squares.dart';
@@ -20,8 +23,6 @@ class WebSocketService {
   WebSocketService._internal();
 
   WebSocketChannel? _channel;
-  StreamController<List<UserProfile>> _onlineUsersController =
-      StreamController<List<UserProfile>>.broadcast();
 
   var _invitationController = StreamController<InvitationMessage>.broadcast();
 
@@ -31,43 +32,48 @@ class WebSocketService {
   Timer? _reconnectTimer;
   bool _isConnected = false;
 
-  Stream<List<UserProfile>> get onlineUsersStream =>
-      _onlineUsersController.stream;
+  bool _isReconnecting = false;
+  static const int maxReconnectAttempts = 5;
+  int _reconnectAttempts = 0;
+
   bool get isConnected => _isConnected;
   Stream<InvitationMessage> get invitationStream =>
       _invitationController.stream;
 
   Future<void> connectWebSocket(BuildContext? context) async {
-    // Retrieve the user from SharedPreferences
-    final user = await SharedPreferencesStorage.instance.getUserLocally();
+    // Si déjà connecté, ne rien faire
+    if (_isConnected && _channel != null) {
+      return;
+    }
 
+    final user = await SharedPreferencesStorage.instance.getUserLocally();
     if (user == null || user.userName.isEmpty) {
       print('No user connected');
       return;
     }
 
-    // URL of your WebSocket
     final wsUrl = '$socketLink?username=${user.userName}';
 
     try {
-      // Establish the WebSocket connection
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
-      // Update the online status on the server
-      await UserService.updateUserOnlineStatus(user.userName, true);
-
-      // Listen to messages
-      _channel!.stream.listen(
+      // Utilisez asBroadcastStream() pour permettre plusieurs écouteurs
+      _channel!.stream.asBroadcastStream().listen(
         (message) {
           _handleMessage(message, context);
         },
-        onDone: () => _onConnectionClosed(context),
+        onDone: () {
+          _isConnected = false;
+          _onConnectionClosed(context);
+        },
         onError: (error) {
+          _isConnected = false;
           print('WebSocket error: $error');
           _reconnect(context);
         },
       );
 
+      await UserService.updateUserOnlineStatus(user.userName, true);
       _isConnected = true;
 
       if (_isConnected) {
@@ -76,8 +82,48 @@ class WebSocketService {
 
       print('WebSocket connected for ${user.userName}');
     } catch (e) {
+      _isConnected = false;
       print('Error connecting WebSocket: $e');
       _reconnect(context);
+    }
+  }
+
+  Future<void> ensureConnection(BuildContext context) async {
+    if (_isReconnecting) return;
+
+    if (!_isConnected || _channel == null || _channel?.closeCode != null) {
+      _isReconnecting = true;
+
+      while (_reconnectAttempts < maxReconnectAttempts && !_isConnected) {
+        try {
+          await connectWebSocket(context);
+          if (_isConnected) {
+            _reconnectAttempts = 0;
+            break;
+          }
+          _reconnectAttempts++;
+          await Future.delayed(
+              Duration(seconds: Math.min(5, _reconnectAttempts * 2)));
+        } catch (e) {
+          print('WebSocket reconnection attempt failed: $e');
+        }
+      }
+
+      _isReconnecting = false;
+    }
+  }
+
+  Future<bool> initializeConnection(BuildContext context) async {
+    try {
+      await ensureConnection(context);
+      if (_isConnected) {
+        sendMessage(json.encode({'type': 'request_online_users'}));
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error initializing WebSocket connection: $e');
+      return false;
     }
   }
 
@@ -119,9 +165,9 @@ class WebSocketService {
           if (context != null) {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
-            gameProvider.setInvitationCancel(value: true);
-            gameProvider.removeInvitation(invitation);
             gameProvider.handleInvitationRejection(context, invitation);
+            gameProvider.setInvitationRejct(value: true);
+            gameProvider.removeInvitation(invitation);
           }
           break;
 
@@ -132,8 +178,8 @@ class WebSocketService {
           if (context != null) {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
-            gameProvider.handleInvitationCancellation(context, invitation);
             gameProvider.setInvitationCancel(value: true);
+            gameProvider.removeInvitation(invitation);
           }
           break;
         // -------------Game -----------------
@@ -255,7 +301,7 @@ class WebSocketService {
         case 'game_over_checkmate':
           if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
-            
+
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
@@ -290,6 +336,43 @@ class WebSocketService {
           }
           break;
 
+        case 'invitation_timeout':
+          if (context != null && context.mounted) {
+            final invitation = json.decode(data['content']);
+            try {
+              final gameProvider =
+                  Provider.of<GameProvider>(context, listen: false);
+
+              gameProvider.setInvitationCancel(value: true);
+              if (gameProvider.user.id == invitation['from_user_id']) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => CustomAlertDialog(
+                      titleMessage: "Demande expirée !",
+                      subtitleMessage:
+                          "La demande d'invitation a expirée. Veuillez réessayer.",
+                      typeDialog: 0,
+                      onOk: () {
+                        Navigator.of(context).pop();
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const FriendListScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                });
+              } else {
+                gameProvider.setInvitationCancel(value: true);
+              }
+            } catch (e) {
+              print('Error processing invitation timeout: $e');
+            }
+          }
         default:
           print('Unhandled message type: ${data['type']}');
       }
@@ -389,6 +472,7 @@ class WebSocketService {
       UserProfile currentUser, InvitationMessage invitation) {
     final gameProvider = Provider.of<GameProvider>(context, listen: false);
     gameProvider.setInvitationCancel(value: false);
+
     switch (invitation.type) {
       case 'invitation_send':
         _showInvitationDialog(context, currentUser, invitation);
@@ -399,48 +483,48 @@ class WebSocketService {
     }
   }
 
+  bool _isDialogShowing = false;
+
   void _showInvitationDialog(BuildContext context, UserProfile currentUser,
       InvitationMessage invitation) {
-    if (ModalRoute.of(context)?.isCurrent ?? false) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return Consumer<GameProvider>(
-            builder: (context, gameProvider, child) {
-              // Vérifier si l'invitation a été annulée
-              if (gameProvider.invitationCancel) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  gameProvider.removeInvitation(invitation);
-                  gameProvider.setInvitationCancel(value: false);
-
+    final gameProvider = Provider.of<GameProvider>(context, listen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isDialogShowing) {
+        _isDialogShowing = true;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext dialogContext) {
+            return CustomAlertDialog(
+              titleMessage: "Invitation!",
+              subtitleMessage:
+                  '${invitation.fromUsername} vous invite à jouer une partie ?',
+              typeDialog: 2,
+              onAccept: () {
+                if (!gameProvider.invitationCancel) {
+                  acceptInvitation(currentUser, invitation);
+                } else if (gameProvider.invitationCancel) {
                   showCustomSnackBarBottom(context,
                       'Invitation annulée pour cause de délai dépassé !');
-                  if (Navigator.of(dialogContext).canPop()) {
-                    Navigator.of(dialogContext).pop();
-                  }
-                });
-              }
-              return CustomAlertDialog(
-                titleMessage: "Invitation!",
-                subtitleMessage:
-                    '${invitation.fromUsername} vous invite à jouer une partie ?',
-                typeDialog: 2,
-                onAccept: () {
-                  acceptInvitation(currentUser, invitation);
-                  gameProvider.setInvitationCancel(value: false);
-                },
-                onCancel: () {
-                  rejectInvitation(context, currentUser, invitation);
-                  gameProvider.setInvitationCancel(value: false);
                   gameProvider.removeInvitation(invitation);
-                },
-              );
-            },
-          );
-        },
-      );
-    }
+                }
+                gameProvider.setInvitationCancel(value: false);
+                _isDialogShowing = false;
+              },
+              onCancel: () {
+                if (!gameProvider.invitationCancel) {
+                  rejectInvitation(context, currentUser, invitation);
+                }
+                gameProvider.setInvitationCancel(value: false);
+                gameProvider.removeInvitation(invitation);
+                _isDialogShowing = false;
+              },
+            );
+          },
+        );
+      }
+      ;
+    });
   }
 
   void _handleInvitationAccepted(
@@ -472,14 +556,15 @@ class WebSocketService {
   }
 
   void _reconnect(BuildContext? context) {
-    // Cancel the previous timer if it exists
-    _reconnectTimer?.cancel();
+    if (_reconnectTimer?.isActive ?? false) return;
 
-    // Attempt to reconnect every 5 seconds
     _reconnectTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (!_isConnected) {
         print('Attempting to reconnect...');
         await connectWebSocket(context);
+        if (_isConnected) {
+          timer.cancel();
+        }
       } else {
         timer.cancel();
       }
@@ -490,17 +575,14 @@ class WebSocketService {
     final user = await SharedPreferencesStorage.instance.getUserLocally();
 
     if (user != null && user.userName.isNotEmpty) {
-      await UserService.updateUserOnlineStatus(user.userName, false);
+      try {
+        await UserService.updateUserOnlineStatus(user.userName, false);
+      } catch (e) {
+        print('Error updating user status: $e');
+      }
     }
 
-    // Close the WebSocket connection
-    _channel?.sink.close();
-    _isConnected = false;
-
-    // Close the online users stream
-    await _onlineUsersController.close();
-
-    _onlineUsersController = StreamController<List<UserProfile>>.broadcast();
+    _cleanup();
   }
 
   // Method to send a message via WebSocket
@@ -542,5 +624,20 @@ class WebSocketService {
   void disposeInvitationStream() {
     _invitationController.close();
     _invitationController = StreamController<InvitationMessage>.broadcast();
+  }
+
+  void _cleanup() {
+    _channel?.sink.close();
+    _channel = null;
+    _isConnected = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _isReconnecting = false;
+    _reconnectAttempts = 0;
+  }
+
+  void cleanupResources() {
+    _cleanup();
+    disconnect();
   }
 }

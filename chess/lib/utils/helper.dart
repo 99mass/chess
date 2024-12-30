@@ -1,5 +1,4 @@
 import 'package:chess/provider/time_provider.dart';
-import 'package:flutter/material.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:squares/squares.dart';
 
@@ -31,44 +30,4 @@ String getTimerToDisplay({
   return timer;
 }
 
-void showDialogGameOver(BuildContext context, String message,
-    {String? score, VoidCallback? onClose}) {
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        backgroundColor: Colors.amber[700],
-        title: const Text('Game Over', style: TextStyle(fontSize: 25)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message,
-                style: const TextStyle(fontSize: 20, color: Colors.white)),
-            if (score != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                'Score: $score',
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            child: const Text('OK',
-                style: TextStyle(fontSize: 20, color: Colors.white)),
-            onPressed: () {
-               Navigator.of(context).pop(false);
-              onClose?.call();
-            },
-          ),
-        ],
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      );
-    },
-  );
-}
+

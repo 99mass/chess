@@ -3,18 +3,23 @@ import 'package:chess/screens/login_screen.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-void main() async {
+void main() async { 
   WidgetsFlutterBinding.ensureInitialized();
   final user = await SharedPreferencesStorage.instance.getUserLocally();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (_) => GameProvider()..loadUser(),
         ),
-      ], 
+      ],
       child: MyApp(
           initialScreen: user == null || user.userName == "" || user.id == ""
               ? const LoginScreen()
@@ -30,7 +35,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp( 
+    return MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Chess',
         theme: ThemeData(

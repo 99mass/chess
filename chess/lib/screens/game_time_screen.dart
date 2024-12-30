@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:chess/constant/constants.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_board_screen.dart';
+import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +16,9 @@ class GameTimeScreen extends StatefulWidget {
 }
 
 class _GameTimeScreenState extends State<GameTimeScreen> {
+  late GameProvider _gameProvider;
+  late WebSocketService _webSocketService;
+
   // Définir les options de temps de jeu
   final List<int> timeOptions = [3, 5, 10, 20, 30, 60];
   int selectedTime = 10;
@@ -23,13 +29,65 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
     GameDifficulty.medium,
     GameDifficulty.hard
   ];
-  GameDifficulty selectedDifficulty =
-      GameDifficulty.medium;
+  GameDifficulty selectedDifficulty = GameDifficulty.medium;
 
   // Définir les options de couleurs de pions
   final List<PlayerColor> colorOptions = [PlayerColor.white, PlayerColor.black];
   PlayerColor selectedColor = PlayerColor.white;
   bool isLoading = false;
+  StreamSubscription? _invitationsSubscription;
+  StreamSubscription? _onlineUsersSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize WebSocket connection
+    _webSocketService = WebSocketService();
+    _gameProvider = Provider.of<GameProvider>(context, listen: false);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeScreen();
+    });
+  }
+
+  Future<void> _initializeScreen() async {
+    try {
+      bool connected = await _webSocketService.initializeConnection(context);
+      if (!connected && mounted) {
+        return;
+      }
+
+      _setupSubscriptions();
+    } catch (e) {
+      print('Error initializing FriendListScreen: $e');
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } finally {}
+  }
+
+  void _setupSubscriptions() {
+    _invitationsSubscription?.cancel();
+    _onlineUsersSubscription?.cancel();
+
+    // Setup new subscriptions
+    _onlineUsersSubscription =
+        _gameProvider.onlineUsersStream.listen((users) {}, onError: (error) {
+      print('Error in online users stream: $error');
+    });
+
+    _invitationsSubscription =
+        _gameProvider.invitationsStream.listen((invitations) {
+      if (invitations.isNotEmpty) {
+        final latestInvitation = invitations.last;
+        _webSocketService.handleInvitationInteraction(
+            context, _gameProvider.user, latestInvitation);
+      }
+    }, onError: (error) {
+      print('Error in invitations stream: $error');
+    });
+  }
 
   void _startGame(GameProvider gameProvider) async {
     setState(() {
@@ -317,5 +375,12 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _invitationsSubscription?.cancel();
+    _onlineUsersSubscription?.cancel();
+    super.dispose();
   }
 }
