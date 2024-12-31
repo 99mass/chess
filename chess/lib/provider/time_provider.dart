@@ -66,13 +66,18 @@ class ChessTimer {
     gameProvider.setIsloading(false);
 
     final String message = _whiteRemainingTime == 0
-        ? 'Les Noirs remportent la partie!'
-        : 'Les Blancs remportent la partie!';
+        ? gameProvider.playerColor == PlayerColor.white
+            ? 'L\'ordinateur a gagné la partie, le temps est terminé!'
+            : 'Vous avez gagné la partie, le temps est terminé!'
+        : gameProvider.playerColor == PlayerColor.black
+            ? 'L\'ordinateur a gagné la partie, le temps est terminé!'
+            : 'Vous avez gagné la partie, le temps est terminé!';
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) => CustomAlertDialog(
-        titleMessage: "Game Over",
+        titleMessage: "Partie Terminée",
         subtitleMessage: message,
         typeDialog: 0,
         onOk: () {

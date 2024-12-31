@@ -10,7 +10,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final user = await SharedPreferencesStorage.instance.getUserLocally();
   await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitUp, 
     DeviceOrientation.portraitDown,
   ]);
   runApp(

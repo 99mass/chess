@@ -25,6 +25,7 @@ class GameProvider extends ChangeNotifier {
   bool _flipBoard = false;
   bool _computerMode = false;
   bool _friendsMode = false;
+  bool _onlineMode = false;
   bool _isLoading = false;
   bool _isGameEnd = false;
 
@@ -51,6 +52,7 @@ class GameProvider extends ChangeNotifier {
   bool get flipBoard => _flipBoard;
   bool get computerMode => _computerMode;
   bool get friendsMode => _friendsMode;
+  bool get onlineMode => _onlineMode;
   bool get isloading => _isLoading;
   bool get isGameEnd => _isGameEnd;
   int get player => _player;
@@ -126,40 +128,157 @@ class GameProvider extends ChangeNotifier {
     return result;
   }
 
+  // void handleGameOver(BuildContext context, {ChessTimer? chessTimer}) {
+  //   if (game.drawn || game.gameOver) {
+  //     _isGameEnd = true;
+  //     String message = '';
+  //     String logo = 'chess_logo.png';
+  //     print('game result: ${game.result}');
+  //     if (game.drawn) {
+  //       if (game.result == 'DrawnGameStalemate' ||
+  //           game.result == 'DrawnGameRepetition' ||
+  //           game.result == 'DrawnGameBothRoyalsDead' ||
+  //           game.result == 'DrawnGameInsufficientMaterial' ||
+  //           game.result == '1/2-1/2' ||
+  //           game.result == 'DrawnGameElimination') {
+  //         message =
+  //             "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
+  //       } else {
+  //         message =
+  //             "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
+  //       }
+  //     } else if (game.winner == Squares.white) {
+  //       message = _playerColor == Squares.white
+  //           ? 'Vous avez gagner la partie, bravo!'
+  //           : 'L\'ordinateur à gagner la partie, dommage!';
+  //       logo = _playerColor == Squares.white
+  //           ? 'assets/icons8_crown.png'
+  //           : 'assets/icons8_lose.png';
+  //     } else if (game.winner == Squares.black) {
+  //       message = _playerColor == Squares.black
+  //           ? 'Vous avez gagner la partie, bravo!'
+  //           : 'L\'ordinateur à gagner la partie, dommage!';
+  //       logo = _playerColor == Squares.black
+  //           ? 'assets/icons8_crown.png'
+  //           : 'assets/icons8_lose.png';
+  //     }
+  //     WidgetsBinding.instance.addPostFrameCallback((_) {
+  //       try {
+  //         _isLoading = false;
+  //         _friendsMode = false;
+  //         _onWillPop = true;
+  //         showDialog(
+  //           context: context,
+  //           barrierDismissible: false,
+  //           builder: (BuildContext dialogContext) => CustomAlertDialog(
+  //             titleMessage: "Partie Terminée",
+  //             subtitleMessage: message,
+  //             typeDialog: 0,
+  //             logo: logo,
+  //           ),
+  //         );
+  //       } catch (e) {
+  //         print('Erreur lors de l\'affichage du dialog: $e');
+  //       }
+  //     });
+  //   }
+  // }
+
   void handleGameOver(BuildContext context, {ChessTimer? chessTimer}) {
     if (game.drawn || game.gameOver) {
       _isGameEnd = true;
-
       String message = '';
       String logo = 'chess_logo.png';
+      print('game result: ${game.result}');
 
-      if (game.drawn) {
-        if (game.result == 'DrawnGameStalemate' ||
-            game.result == 'DrawnGameRepetition' ||
-            game.result == 'DrawnGameBothRoyalsDead' ||
-            game.result == 'DrawnGameInsufficientMaterial' ||
-            game.result == '1/2-1/2' ||
-            game.result == 'DrawnGameElimination') {
+      if (game.result is bishop.DrawnGame) {
+        // Gestion détaillée des types de match nul
+        if (game.result is bishop.DrawnGameStalemate) {
           message =
-              "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
+              "Pat ! Aucun coup légal n'est possible, la partie est nulle.";
+        } else if (game.result is bishop.DrawnGameRepetition) {
+          final drawRepetition = game.result as bishop.DrawnGameRepetition;
+          message =
+              "Nulle par répétition ! La même position s'est répétée ${drawRepetition.repeats} fois.";
+        } else if (game.result is bishop.DrawnGameBothRoyalsDead) {
+          message = "Nulle ! Les deux rois ont été capturés simultanément.";
+        } else if (game.result is bishop.DrawnGameInsufficientMaterial) {
+          message =
+              "Nulle par matériel insuffisant ! Aucun joueur ne peut gagner.";
+        } else if (game.result is bishop.DrawnGameElimination) {
+          message = "Nulle par élimination ! Tous les pions ont été éliminés.";
+        } else if (game.result is bishop.DrawnGameLength) {
+          message =
+              "Nulle selon la règle des 50 coups ! Aucune prise ou mouvement de pion.";
+        } else if (game.result is bishop.DrawnGamePoints) {
+          final drawPoints = game.result as bishop.DrawnGamePoints;
+          message =
+              "Nulle par points égaux ! Score final : ${drawPoints.points}";
+        } else if (game.result is bishop.DrawnGameEnteredRegion) {
+          final regionDraw = game.result as bishop.DrawnGameEnteredRegion;
+          message =
+              "Nulle ! ${bishop.Bishop.playerName[regionDraw.player]} est entré dans une région protégée.";
+        } else if (game.result is bishop.DrawnGameExitedRegion) {
+          final regionDraw = game.result as bishop.DrawnGameExitedRegion;
+          message =
+              "Nulle ! ${bishop.Bishop.playerName[regionDraw.player]} est sorti d'une région obligatoire.";
         } else {
-          message =
-              "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
+          message = "La partie se termine sur un match nul !";
         }
-      } else if (game.winner == Squares.white) {
-        message = _playerColor == Squares.white
-            ? 'Vous avez gagner la partie, bravo!'
-            : 'L\'ordinateur à gagner la partie, dommage!';
-        logo = _playerColor == Squares.white
-            ? 'assets/icons8_crown.png'
-            : 'assets/icons8_lose.png';
-      } else if (game.winner == Squares.black) {
-        message = _playerColor == Squares.black
-            ? 'Vous avez gagner la partie, bravo!'
-            : 'L\'ordinateur à gagner la partie, dommage!';
-        logo = _playerColor == Squares.black
-            ? 'assets/icons8_crown.png'
-            : 'assets/icons8_lose.png';
+      } else if (game.result is bishop.WonGame) {
+        final wonGame = game.result as bishop.WonGame;
+        String winReason = '';
+
+        if (game.result is bishop.WonGameCheckmate) {
+          winReason = 'par échec et mat';
+        } else if (game.result is bishop.WonGameCheckLimit) {
+          final checkLimit = game.result as bishop.WonGameCheckLimit;
+          winReason = 'en donnant ${checkLimit.numChecks} échecs consécutifs';
+        } else if (game.result is bishop.WonGameEnteredRegion) {
+          winReason = 'en entrant dans la région gagnante';
+        } else if (game.result is bishop.WonGameExitedRegion) {
+          winReason = 'en sortant de la région perdante';
+        } else if (game.result is bishop.WonGameRoyalDead) {
+          winReason = 'par capture du roi adverse';
+        } else if (game.result is bishop.WonGameElimination) {
+          final elimination = game.result as bishop.WonGameElimination;
+          winReason = elimination.pieceType != null
+              ? 'par élimination des ${elimination.pieceType}'
+              : 'par élimination';
+        } else if (game.result is bishop.WonGameStalemate) {
+          winReason = 'par pat forcé';
+        } else if (game.result is bishop.WonGamePoints) {
+          final points = game.result as bishop.WonGamePoints;
+          winReason = 'avec un score de ${points.points} points';
+        }
+
+        if (wonGame.winner == bishop.Bishop.white) {
+          if (_playerColor == bishop.Bishop.white) {
+            message = winReason.isEmpty
+                ? 'Félicitations ! Vous avez gagné la partie !'
+                : 'Félicitations ! Vous avez gagné $winReason !';
+          } else {
+            message = winReason.isEmpty
+                ? "L'ordinateur a gagné la partie, dommage !"
+                : "L'ordinateur a gagné $winReason, dommage !";
+          }
+          logo = _playerColor == Squares.white
+              ? 'assets/icons8_crown.png'
+              : 'assets/icons8_lose.png';
+        } else if (wonGame.winner == Squares.black) {
+          if (_playerColor == Squares.black) {
+            message = winReason.isEmpty
+                ? 'Félicitations ! Vous avez gagné la partie !'
+                : 'Félicitations ! Vous avez gagné $winReason !';
+          } else {
+            message = winReason.isEmpty
+                ? "L'ordinateur a gagné la partie, dommage !"
+                : "L'ordinateur a gagné $winReason, dommage !";
+          }
+          logo = _playerColor == Squares.black
+              ? 'assets/icons8_crown.png'
+              : 'assets/icons8_lose.png';
+        }
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -172,7 +291,7 @@ class GameProvider extends ChangeNotifier {
             context: context,
             barrierDismissible: false,
             builder: (BuildContext dialogContext) => CustomAlertDialog(
-              titleMessage: "Game Over",
+              titleMessage: "Partie Terminée",
               subtitleMessage: message,
               typeDialog: 0,
               logo: logo,
@@ -215,6 +334,13 @@ class GameProvider extends ChangeNotifier {
   void setFriendsMode({required bool value}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _friendsMode = value;
+      notifyListeners();
+    });
+  }
+
+  void setOnlineMode({required bool value}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onlineMode = value;
       notifyListeners();
     });
   }
@@ -353,27 +479,116 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
+  // void handleGameOverFriends() {
+  //   if (game.drawn || game.gameOver) {
+  //     _isGameEnd = true;
+  //     String winner = '';
+  //     if (game.drawn) {
+  //       if (game.result == 'DrawnGameStalemate' ||
+  //           game.result == 'DrawnGameRepetition' ||
+  //           game.result == 'DrawnGameBothRoyalsDead' ||
+  //           game.result == 'DrawnGameInsufficientMaterial' ||
+  //           game.result == '1/2-1/2' ||
+  //           game.result == 'DrawnGameElimination') {
+  //         winner = 'Draw';
+  //       } else {
+  //         winner = 'Draw';
+  //       }
+  //     } else if (game.winner == Squares.white) {
+  //       winner = 'White';
+  //     } else if (game.winner == Squares.black) {
+  //       winner = 'Black';
+  //     }
+  //     if (_gameModel != null) {
+  //       final gameOverMessage = {
+  //         'type': 'game_over_checkmate',
+  //         'content': json.encode({
+  //           'gameId': _gameModel!.gameId,
+  //           'winner': winner,
+  //           'winnerId': _isWhiterPlayer
+  //               ? winner == 'White'
+  //                   ? _gameModel!.gameCreatorUid
+  //                   : _gameModel!.userId
+  //               : winner == 'Black'
+  //                   ? _gameModel!.gameCreatorUid
+  //                   : _gameModel!.userId,
+  //         }),
+  //       };
+  //       // Envoyer via WebSocket
+  //       WebSocketService().sendMessage(json.encode(gameOverMessage));
+  //     }
+  //   }
+  // }
+
   void handleGameOverFriends() {
     if (game.drawn || game.gameOver) {
       _isGameEnd = true;
-
       String winner = '';
+      String raison = '';
 
-      if (game.drawn) {
-        if (game.result == 'DrawnGameStalemate' ||
-            game.result == 'DrawnGameRepetition' ||
-            game.result == 'DrawnGameBothRoyalsDead' ||
-            game.result == 'DrawnGameInsufficientMaterial' ||
-            game.result == '1/2-1/2' ||
-            game.result == 'DrawnGameElimination') {
-          winner = 'Draw';
+      if (game.result is bishop.DrawnGame) {
+        winner = 'Draw';
+
+        // Déterminer la raison précise du match nul en français
+        if (game.result is bishop.DrawnGameStalemate) {
+          raison =
+              "Pat ! Aucun coup légal n'est possible, la partie est nulle.";
+        } else if (game.result is bishop.DrawnGameRepetition) {
+          final drawRepetition = game.result as bishop.DrawnGameRepetition;
+          raison =
+              "Nulle par répétition ! La même position s'est répétée ${drawRepetition.repeats} fois.";
+        } else if (game.result is bishop.DrawnGameBothRoyalsDead) {
+          raison = "Nulle ! Les deux rois ont été capturés simultanément.";
+        } else if (game.result is bishop.DrawnGameInsufficientMaterial) {
+          raison =
+              "Nulle par matériel insuffisant ! Aucun joueur ne peut gagner.";
+        } else if (game.result is bishop.DrawnGameElimination) {
+          raison = "Nulle par élimination ! Tous les pions ont été éliminés.";
+        } else if (game.result is bishop.DrawnGameLength) {
+          raison =
+              "Nulle selon la règle des 50 coups ! Aucune prise ou mouvement de pion.";
+        } else if (game.result is bishop.DrawnGamePoints) {
+          final drawPoints = game.result as bishop.DrawnGamePoints;
+          raison =
+              "Nulle par points égaux ! Score final : ${drawPoints.points}";
+        } else if (game.result is bishop.DrawnGameEnteredRegion) {
+          final regionDraw = game.result as bishop.DrawnGameEnteredRegion;
+          raison =
+              "Nulle ! ${bishop.Bishop.playerName[regionDraw.player]} est entré dans une région protégée.";
+        } else if (game.result is bishop.DrawnGameExitedRegion) {
+          final regionDraw = game.result as bishop.DrawnGameExitedRegion;
+          raison =
+              "Nulle ! ${bishop.Bishop.playerName[regionDraw.player]} est sorti d'une région obligatoire.";
         } else {
-          winner = 'Draw';
+          raison = "La partie se termine sur un match nul !";
         }
-      } else if (game.winner == Squares.white) {
-        winner = 'White';
-      } else if (game.winner == Squares.black) {
-        winner = 'Black';
+      } else if (game.result is bishop.WonGame) {
+        final wonGame = game.result as bishop.WonGame;
+        winner = wonGame.winner == bishop.Bishop.white ? 'White' : 'Black';
+
+        // Déterminer la raison précise de la victoire en français
+        if (game.result is bishop.WonGameCheckmate) {
+          raison = 'par échec et mat';
+        } else if (game.result is bishop.WonGameCheckLimit) {
+          final checkLimit = game.result as bishop.WonGameCheckLimit;
+          raison = 'en donnant ${checkLimit.numChecks} échecs consécutifs';
+        } else if (game.result is bishop.WonGameEnteredRegion) {
+          raison = 'en entrant dans la région gagnante';
+        } else if (game.result is bishop.WonGameExitedRegion) {
+          raison = 'en sortant de la région perdante';
+        } else if (game.result is bishop.WonGameRoyalDead) {
+          raison = 'par capture du roi adverse';
+        } else if (game.result is bishop.WonGameElimination) {
+          final elimination = game.result as bishop.WonGameElimination;
+          raison = elimination.pieceType != null
+              ? 'par élimination des ${elimination.pieceType}'
+              : 'par élimination';
+        } else if (game.result is bishop.WonGameStalemate) {
+          raison = 'par pat forcé';
+        } else if (game.result is bishop.WonGamePoints) {
+          final points = game.result as bishop.WonGamePoints;
+          raison = 'avec un score de ${points.points} points';
+        }
       }
 
       if (_gameModel != null) {
@@ -382,6 +597,7 @@ class GameProvider extends ChangeNotifier {
           'content': json.encode({
             'gameId': _gameModel!.gameId,
             'winner': winner,
+            'reason': raison,
             'winnerId': _isWhiterPlayer
                 ? winner == 'White'
                     ? _gameModel!.gameCreatorUid
@@ -498,8 +714,25 @@ class GameProvider extends ChangeNotifier {
         ));
   }
 
+
+  bool _invitationTimeOut = false;
+  bool _cancelWaintingRoom = false;
   bool _invitationRejct = false;
+
+  bool get invitationTimeOut => _invitationTimeOut;
   bool get invitationRejct => _invitationRejct;
+  bool get cancelWaintingRoom => _cancelWaintingRoom;
+
+  void setInvitationTimeOut({required bool value}) {
+    _invitationTimeOut = value;
+    notifyListeners();
+  }
+
+  void setCancelWaintingRoom({required bool value}) {
+    _cancelWaintingRoom = value;
+    notifyListeners();
+  }
+
   void setInvitationRejct({required bool value}) {
     _invitationRejct = value;
     notifyListeners();

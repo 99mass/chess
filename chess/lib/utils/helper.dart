@@ -29,5 +29,3 @@ String getTimerToDisplay({
 
   return timer;
 }
-
-

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/screens/login_screen.dart';
+import 'package:chess/screens/waiting_room_screen.dart';
 import 'package:chess/services/user_service.dart';
 import 'package:chess/services/web_socket_service.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
@@ -78,7 +80,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     }
     _gameProvider.setCompturMode(value: false);
     _gameProvider.setFriendsMode(value: false);
+    _gameProvider.setOnlineMode(value: false);
+    _gameProvider.setInvitationRejct(value: false);
+    _gameProvider.setCancelWaintingRoom(value: false);
+    _gameProvider.setInvitationTimeOut(value: false);
     _gameProvider.setGameModel();
+    _gameProvider.setOnWillPop(value: false);
     _gameProvider.setCurrentInvitation();
   }
 
@@ -127,11 +134,36 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         return;
       }
     }
+    _gameProvider.setInvitationCancel(value: false);
     _gameProvider.setFriendsMode(value: true);
     if (mounted) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const FriendListScreen()),
+      );
+    }
+  }
+
+  void _handleOnlineModeClick() async {
+    if (!_webSocketService.isConnected) {
+      // Tentative de reconnexion avant d'accéder aux fonctionnalités en ligne
+      bool connected = await _webSocketService.initializeConnection(context);
+      if (!connected) {
+        if (mounted) {
+          showCustomSnackBarTop(context,
+              "Connexion impossible. Veuillez vérifier votre connexion internet.");
+        }
+        return;
+      }
+    }
+
+    _webSocketService.sendMessage(json.encode({'type': 'public_game_request'}));
+    if (mounted) {
+      _gameProvider.setOnlineMode(value: true);
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const WaitingRoomScreen()),
       );
     }
   }
@@ -204,10 +236,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           color: ColorsConstants.colorBg,
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Show connection status
-            // if (_isConnecting && !_webSocketService.isConnected)
             if (_isInitializing)
               const Column(
                 children: [
@@ -222,10 +253,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   ),
                 ],
               ),
-
             Container(
               width: 80,
               height: 80,
+              margin: const EdgeInsets.only(top: 50),
               decoration: const BoxDecoration(
                 image: DecorationImage(
                   image: AssetImage('assets/chess_logo.png'),
@@ -243,15 +274,21 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 ),
                 const SizedBox(height: 40),
                 _buildMenuButton(
-                  'vs Ordinateur',
-                  'icons8_ai.png',
-                  onTap: _handleComputerModeClick,
+                  'Jouer en ligne',
+                  'icons8_online.png',
+                  onTap: _handleOnlineModeClick,
                 ),
                 const SizedBox(height: 15),
                 _buildMenuButton(
-                  'vs Amis',
+                  'Jouer avec des amis',
                   'icons8_handshake.png',
                   onTap: _handleFriendsModeClick,
+                ),
+                const SizedBox(height: 15),
+                _buildMenuButton(
+                  'Jouer avec l\'ordinateur',
+                  'icons8_ai.png',
+                  onTap: _handleComputerModeClick,
                 ),
               ],
             ),
@@ -274,19 +311,22 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
         child: Row(
           children: [
-            const SizedBox(width: 40),
+            const SizedBox(width: 20),
             Image(
               image: AssetImage('assets/$imageAsset'),
               width: 70,
               height: 70,
             ),
             const SizedBox(width: 10),
-            Text(
-              text,
-              style: const TextStyle(
-                color: ColorsConstants.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            Flexible(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: ColorsConstants.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.visible,
               ),
             ),
           ],

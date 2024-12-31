@@ -24,8 +24,8 @@ class _FriendListScreenState extends State<FriendListScreen> {
   List<UserProfile> onlineUsers = [];
   bool _isInitializing = false;
 
-   StreamSubscription? _onlineUsersSubscription;
-   StreamSubscription? _invitationsSubscription;
+  StreamSubscription? _onlineUsersSubscription;
+  StreamSubscription? _invitationsSubscription;
 
   @override
   void initState() {
@@ -160,7 +160,12 @@ class _FriendListScreenState extends State<FriendListScreen> {
                         padding: const EdgeInsets.all(16),
                         itemCount: onlineUsers.length,
                         itemBuilder: (context, index) {
-                          return _buildFriendItem(context, onlineUsers[index]);
+                          return onlineUsers[index].userName ==
+                                  _gameProvider.user.userName
+                              ? onlineUsers.length == 1
+                                  ? _buildEmptyMessage()
+                                  : Container()
+                              : _buildFriendItem(context, onlineUsers[index]);
                         },
                       );
                     },
@@ -181,6 +186,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
         _webSocketService.sendGameInvitation(context,
             toUser: user, currentUser: _gameProvider.user);
         _gameProvider.setOpponentUsername(username: user.userName);
+        _gameProvider.setInvitationRejct(value: false);
 
         // Navigate to waiting room
         Navigator.pushReplacement(

@@ -207,7 +207,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     // Envoyer les commandes à Stockfish
     stockfish!.stdin =
         '${StockfishUicCommand.position} ${_gameProvider.getPositionFen()}';
-    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 500}';
+    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 200}';
 
     // Désabonner les anciens écouteurs s'il y en a
     _stockfishSubscription?.cancel();
