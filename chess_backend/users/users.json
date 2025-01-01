@@ -10,7 +10,7 @@
             "id": "c5e71fb31962da30cfe66ab80acd203a",
             "username": "Pixel 200",
             "isnOline": true,
-            "isInRoom": true
+            "isInRoom": false
         },
         "Pixel 3": {
             "id": "dbb8c7c90d7014ee34585213e7e3b90f",
@@ -34,12 +34,12 @@
             "id": "72b20ddf41e4980e0d6924dffd3e4c32",
             "username": "Pixel 5",
             "isnOline": true,
-            "isInRoom": true
+            "isInRoom": false
         },
         "Pixel 6": {
             "id": "1713439a4c0098b7e2334d11a43e69d0",
             "username": "Pixel 6",
-            "isnOline": false,
+            "isnOline": true,
             "isInRoom": false
         },
         "Samba": {

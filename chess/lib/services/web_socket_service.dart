@@ -337,8 +337,8 @@ class WebSocketService {
           break;
 
         case 'game_over_checkmate':
-          if (context != null && context.mounted) {
             final gameOverData = json.decode(data['content']);
+          if (context != null && context.mounted) {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
@@ -350,7 +350,7 @@ class WebSocketService {
                 message = gameOverData['reason'];
               } else {
                 // Pour les victoires/défaites
-                String raison = gameOverData['raison'];
+                String raison = gameOverData['reason'];
                 if (gameOverData['winnerId'] == gameProvider.user.id) {
                   message = raison.isEmpty
                       ? 'Félicitations ! Vous avez gagné la partie !'

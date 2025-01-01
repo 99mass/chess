@@ -27,7 +27,6 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
   late GameProvider _gameProvider;
   late WebSocketService _webSocketService;
   late InvitationMessage? invitation;
-  StreamSubscription? _invitationsSubscription;
   StreamSubscription? _onlineUsersSubscription;
 
   @override
@@ -72,24 +71,12 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
 
   void _setupSubscriptions() {
     // Cancel existing subscriptions if any
-    _invitationsSubscription?.cancel();
     _onlineUsersSubscription?.cancel();
 
     // Setup new subscriptions
     _onlineUsersSubscription =
         _gameProvider.onlineUsersStream.listen((users) {}, onError: (error) {
       print('Error in online users stream: $error');
-    });
-
-    _invitationsSubscription =
-        _gameProvider.invitationsStream.listen((invitations) {
-      if (invitations.isNotEmpty) {
-        final latestInvitation = invitations.last;
-        _webSocketService.handleInvitationInteraction(
-            context, _gameProvider.user, latestInvitation);
-      }
-    }, onError: (error) {
-      print('Error in invitations stream: $error');
     });
   }
 
@@ -204,7 +191,6 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
 
   @override
   void dispose() {
-    _invitationsSubscription?.cancel();
     _onlineUsersSubscription?.cancel();
     _controller.dispose();
     super.dispose();
