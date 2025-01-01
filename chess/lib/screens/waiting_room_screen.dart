@@ -163,8 +163,19 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
         ),
         body: Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
+              Container(
+                width: 80,
+                height: 80,
+                margin: const EdgeInsets.only(top: 50, bottom: 100),
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/chess_logo.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
               const CustomImageSpinner(
                 size: 100.0,
                 duration: Duration(milliseconds: 2000),
