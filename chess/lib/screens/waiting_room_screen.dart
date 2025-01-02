@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:chess/widgets/custom_snack_bar.dart';
@@ -27,6 +28,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
   late GameProvider _gameProvider;
   late WebSocketService _webSocketService;
   late InvitationMessage? invitation;
+
   StreamSubscription? _onlineUsersSubscription;
 
   @override
@@ -49,6 +51,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeServices();
     });
+
   }
 
   Future<void> _initializeServices() async {
@@ -80,13 +83,12 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     });
   }
 
+
   Future<bool> _onWillPop() async {
     if (_gameProvider.onlineMode && _gameProvider.onWillPop) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
-        ),
+        CustomPageRoute(child: const MainMenuScreen()),
       );
       return true;
     }
@@ -96,9 +98,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
-        ),
+        CustomPageRoute(child: const MainMenuScreen()),
       );
       return true;
     }
@@ -136,9 +136,7 @@ class _WaitingRoomScreenState extends State<WaitingRoomScreen>
     }
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => const MainMenuScreen(),
-      ),
+      CustomPageRoute(child: const MainMenuScreen()),
     );
   }
 

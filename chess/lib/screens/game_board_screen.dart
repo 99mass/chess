@@ -6,6 +6,7 @@ import 'package:chess/provider/game_provider.dart';
 import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/utils/helper.dart';
 import 'package:chess/utils/stockfish_uic_command.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
@@ -257,9 +258,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       Timer(const Duration(seconds: 1), () {});
       Future.microtask(() => Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => const MainMenuScreen(),
-            ),
+            CustomPageRoute(child: const MainMenuScreen()),
           ));
     }
 
@@ -477,9 +476,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         Timer(const Duration(seconds: 2), () {});
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const MainMenuScreen(),
-          ),
+          CustomPageRoute(child: const MainMenuScreen()),
         );
       }
     }
@@ -492,9 +489,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       Timer(const Duration(seconds: 2), () {});
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
-        ),
+        CustomPageRoute(child: const MainMenuScreen()),
       );
     }
   }
@@ -519,9 +514,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
         Timer(const Duration(seconds: 2), () {});
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const MainMenuScreen(),
-          ),
+          CustomPageRoute(child: const MainMenuScreen()),
         );
 
         return true;
@@ -536,9 +529,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
       Timer(const Duration(seconds: 2), () {});
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const MainMenuScreen(),
-        ),
+        CustomPageRoute(child: const MainMenuScreen()),
       );
 
       return true;

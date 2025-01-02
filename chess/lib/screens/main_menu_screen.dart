@@ -7,6 +7,7 @@ import 'package:chess/screens/login_screen.dart';
 import 'package:chess/screens/waiting_room_screen.dart';
 import 'package:chess/services/user_service.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
@@ -112,24 +113,21 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     });
   }
 
+
   void _handleComputerModeClick() {
     _gameProvider.setCompturMode(value: true);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const GameTimeScreen(),
-      ),
-    );
+    Navigator.push(context, CustomPageRoute(child: const GameTimeScreen()));
   }
 
   void _handleFriendsModeClick() async {
+
     if (!_webSocketService.isConnected) {
       // Tentative de reconnexion avant d'accéder aux fonctionnalités en ligne
       bool connected = await _webSocketService.initializeConnection(context);
       if (!connected) {
         if (mounted) {
           showCustomSnackBarTop(context,
-              "Connexion impossible. Veuillez vérifier votre connexion internet.");
+              "Connexion impossible. Veuillez réessayer.");
         }
         return;
       }
@@ -137,21 +135,19 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     _gameProvider.setInvitationCancel(value: false);
     _gameProvider.setFriendsMode(value: true);
     if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const FriendListScreen()),
-      );
+      Navigator.push(context, CustomPageRoute(child: const FriendListScreen()));
     }
   }
 
   void _handleOnlineModeClick() async {
+
     if (!_webSocketService.isConnected) {
       // Tentative de reconnexion avant d'accéder aux fonctionnalités en ligne
       bool connected = await _webSocketService.initializeConnection(context);
       if (!connected) {
         if (mounted) {
           showCustomSnackBarTop(context,
-              "Connexion impossible. Veuillez vérifier votre connexion internet.");
+              "Connexion impossible. Veuillez réessayer.");
         }
         return;
       }
@@ -162,9 +158,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       _gameProvider.setOnlineMode(value: true);
 
       Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const WaitingRoomScreen()),
-      );
+          context, CustomPageRoute(child: const WaitingRoomScreen()));
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:chess/model/friend_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_time_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +47,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
       if (!connected && mounted) {
         Navigator.pop(context);
         showCustomSnackBarTop(context,
-            "Impossible de se connecter au serveur. Veuillez réessayer plus tard.");
+            "Impossible de se connecter au serveur. Veuillez réessayer.");
         return;
       }
 
@@ -178,7 +179,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
 
   Widget _buildFriendItem(BuildContext context, UserProfile user) {
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         _gameProvider.createInvitation(
             toUser: user, fromUser: _gameProvider.user);
 
@@ -191,9 +192,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
         // Navigate to waiting room
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const WaitingRoomScreen(),
-          ),
+          CustomPageRoute(child: const WaitingRoomScreen()),
         );
       },
       child: Container(
@@ -286,9 +285,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const GameTimeScreen(),
-                ),
+                CustomPageRoute(child: const GameTimeScreen()),
               );
             },
           ),

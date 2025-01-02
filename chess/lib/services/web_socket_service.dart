@@ -4,6 +4,7 @@ import 'dart:math' as Math;
 
 import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/screens/main_menu_screen.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_snack_bar.dart';
 import 'package:squares/squares.dart';
@@ -203,9 +204,7 @@ class WebSocketService {
                         Navigator.of(context).pop();
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => const FriendListScreen(),
-                          ),
+                          CustomPageRoute(child: const FriendListScreen()),
                         );
                       },
                     ),
@@ -233,9 +232,7 @@ class WebSocketService {
               gameProvider.setIsloading(true);
 
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const GameBoardScreen(),
-                ),
+                CustomPageRoute2(child: const GameBoardScreen()),
               );
             } catch (e) {
               print('Error initializing game: $e');
@@ -337,7 +334,7 @@ class WebSocketService {
           break;
 
         case 'game_over_checkmate':
-            final gameOverData = json.decode(data['content']);
+          final gameOverData = json.decode(data['content']);
           if (context != null && context.mounted) {
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
@@ -398,9 +395,7 @@ class WebSocketService {
             showCustomSnackBarTop(context, timeOutData['message']);
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (context) => const MainMenuScreen(),
-              ),
+              CustomPageRoute(child: const MainMenuScreen()),
             );
           }
           break;

@@ -4,6 +4,7 @@ import 'package:chess/constant/constants.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/game_board_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -111,8 +112,8 @@ class _GameTimeScreenState extends State<GameTimeScreen> {
       });
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const GameBoardScreen(),
+        CustomPageRoute2(
+          child: const GameBoardScreen(),
         ),
       );
     }

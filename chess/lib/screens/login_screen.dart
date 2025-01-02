@@ -3,6 +3,7 @@ import 'package:chess/model/friend_model.dart';
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/services/user_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:chess/widgets/custom_image_spinner.dart';
 import 'package:chess/widgets/custom_snack_bar.dart';
@@ -41,7 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-
     final errorMessage = _validateInputs();
     if (errorMessage != null) {
       _showError(errorMessage);
@@ -63,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const MainMenuScreen()),
+          CustomPageRoute(child: const MainMenuScreen()),
         );
       } on AuthException catch (e) {
         String message;

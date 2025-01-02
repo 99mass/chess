@@ -11,6 +11,7 @@ import 'package:chess/model/invitation_model.dart';
 import 'package:chess/provider/time_provider.dart';
 import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/services/web_socket_service.dart';
+import 'package:chess/utils/custom_page_route.dart';
 import 'package:chess/utils/shared_preferences_storage.dart';
 import 'package:chess/widgets/custom_alert_dialog.dart';
 import 'package:chess/widgets/custom_snack_bar.dart';
@@ -708,12 +709,8 @@ class GameProvider extends ChangeNotifier {
         context, '${invitation.fromUsername} a rejeter  votre invitation');
 
     Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const FriendListScreen(),
-        ));
+        context, CustomPageRoute(child: const FriendListScreen()));
   }
-
 
   bool _invitationTimeOut = false;
   bool _cancelWaintingRoom = false;
