@@ -8,27 +8,26 @@ import (
 )
 
 type ChessGameRoom struct {
-	RoomID      string     `json:"room_id"`
-	WhitePlayer OnlineUser `json:"white_player"`
-	BlackPlayer OnlineUser `json:"black_player"`
-	CreatedAt   time.Time  `json:"created_at"`
+	RoomID      string               `json:"room_id"`
+	WhitePlayer OnlineUser           `json:"white_player"`
+	BlackPlayer OnlineUser           `json:"black_player"`
+	CreatedAt   time.Time            `json:"created_at"`
 	Connections map[string]*SafeConn `json:"-"`
 	mutex       sync.RWMutex
 	GameState   map[string]interface{} `json:"game_state,omitempty"`
 	Status      RoomStatus             `json:"status"`
 
-
-	GameCreatorUID string `json:"game_creator_uid"`
-	PositionFEN    string `json:"position_fen"`
-	WinnerID       string `json:"winner_id,omitempty"`
-	WhitesTime     string `json:"whites_time"`
-	BlacksTime     string `json:"blacks_time"`
-	IsWhitesTurn   bool   `json:"is_whites_turn"`
-	IsGameOver     bool   `json:"is_game_over"`
-	Moves          []Move `json:"moves"`
-	Timer          *ChessTimer
+	GameCreatorUID    string `json:"game_creator_uid"`
+	PositionFEN       string `json:"position_fen"`
+	WinnerID          string `json:"winner_id,omitempty"`
+	WhitesTime        string `json:"whites_time"`
+	BlacksTime        string `json:"blacks_time"`
+	IsWhitesTurn      bool   `json:"is_whites_turn"`
+	IsGameOver        bool   `json:"is_game_over"`
+	Moves             []Move `json:"moves"`
+	Timer             *ChessTimer
 	InvitationTimeout *InvitationTimeout
-	onlineManager *OnlineUsersManager
+	onlineManager     *OnlineUsersManager
 }
 
 type Move struct {
@@ -46,8 +45,8 @@ const (
 )
 
 type RoomManager struct {
-	rooms map[string]*ChessGameRoom
-	mutex sync.RWMutex
+	rooms         map[string]*ChessGameRoom
+	mutex         sync.RWMutex
 	onlineManager *OnlineUsersManager
 }
 
@@ -58,7 +57,7 @@ const (
 
 func NewRoomManager(onlineManager *OnlineUsersManager) *RoomManager {
 	return &RoomManager{
-		rooms: make(map[string]*ChessGameRoom),
+		rooms:         make(map[string]*ChessGameRoom),
 		onlineManager: onlineManager,
 	}
 }
@@ -77,7 +76,7 @@ func (rm *RoomManager) CreateRoom(invitation InvitationMessage) *ChessGameRoom {
 			ID:       invitation.ToUserID,
 			Username: invitation.ToUsername,
 		},
-		CreatedAt: time.Now(),
+		CreatedAt:   time.Now(),
 		Connections: make(map[string]*SafeConn),
 		Status:      RoomStatusPending,
 		GameState:   make(map[string]interface{}),
@@ -93,14 +92,13 @@ func (rm *RoomManager) CreateRoom(invitation InvitationMessage) *ChessGameRoom {
 		onlineManager:  rm.onlineManager,
 	}
 
-	timer := NewChessTimer(room, 10)
+	timer := NewChessTimer(room, 1)
 	room.Timer = timer
 	timer.Start()
 
 	rm.rooms[invitation.RoomID] = room
 	return room
 }
-
 
 func (rm *RoomManager) GetRoom(roomID string) (*ChessGameRoom, bool) {
 	rm.mutex.RLock()
@@ -110,20 +108,20 @@ func (rm *RoomManager) GetRoom(roomID string) (*ChessGameRoom, bool) {
 	return room, exists
 }
 
-
 func (rm *RoomManager) RemoveRoom(roomID string) {
 	rm.mutex.Lock()
 	defer rm.mutex.Unlock()
 
-	
 	if room, exists := rm.rooms[roomID]; exists {
-		
+
 		if room.Timer != nil {
 			room.Timer.Stop()
 		}
 		delete(rm.rooms, roomID)
 	}
 }
+
+
 
 func (room *ChessGameRoom) AddConnection(username string, conn *SafeConn) {
 	room.mutex.Lock()
@@ -199,6 +197,7 @@ func (m *OnlineUsersManager) RemoveUserFromRoom(username string) ([]OnlineUser, 
 	return m.getCurrentOnlineUsers(), nil
 }
 
+
 func (room *ChessGameRoom) BroadcastMessage(message WebSocketMessage) {
     room.mutex.RLock()
     connections := make(map[string]*SafeConn)
@@ -207,17 +206,16 @@ func (room *ChessGameRoom) BroadcastMessage(message WebSocketMessage) {
     }
     room.mutex.RUnlock()
 
+    // Utiliser un WaitGroup pour s'assurer que tous les messages sont envoyés
+    var wg sync.WaitGroup
     for username, conn := range connections {
-        err := conn.WriteJSON(message)
-        if err != nil {
-            log.Printf("Error broadcasting message to %s: %v", username, err)
-            // Si la connexion est fermée, supprimer l'utilisateur de la room
-            if err.Error() == "write: broken pipe" || 
-               err.Error() == "use of closed network connection" {
-                room.mutex.Lock()
-                delete(room.Connections, username)
-                room.mutex.Unlock()
+        wg.Add(1)
+        go func(username string, conn *SafeConn) {
+            defer wg.Done()
+            if err := conn.WriteJSON(message); err != nil {
+                log.Printf("Error broadcasting message to %s: %v", username, err)
             }
-        }
+        }(username, conn)
     }
+    wg.Wait()
 }

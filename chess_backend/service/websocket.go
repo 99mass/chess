@@ -120,158 +120,172 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 			log.Printf("WebSocket read error for %s: %v", username, err)
 			break
 		}
+		go func(msg WebSocketMessage) {
+			switch msg.Type {
+			case "request_online_users":
 
-		switch message.Type {
-		case "request_online_users":
+				onlineUsers := m.getCurrentOnlineUsers()
+				conn.WriteJSON(WebSocketMessage{
+					Type:    "online_users",
+					Content: string(mustJson(onlineUsers)),
+				})
 
-			onlineUsers := m.getCurrentOnlineUsers()
-			conn.WriteJSON(WebSocketMessage{
-				Type:    "online_users",
-				Content: string(mustJson(onlineUsers)),
-			})
-
-		case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel", "room_leave":
-			var invitation InvitationMessage
-			if err := json.Unmarshal([]byte(message.Content), &invitation); err != nil {
-				log.Printf("Error parsing invitation: %v", err)
-				continue
-			}
-
-			if err := m.handleInvitation(invitation); err != nil {
-				log.Printf("Failed to process invitation: %v", err)
-			}
-			m.broadcastOnlineUsers()
-
-		case "leave_room":
-			var leaveRequest struct {
-				Username string `json:"username"`
-			}
-			if err := json.Unmarshal([]byte(message.Content), &leaveRequest); err != nil {
-				log.Printf("Error parsing leave room request: %v", err)
-				continue
-			}
-
-			m.cleanupPlayerFromPublicQueue(username)
-
-			_, err := m.RemoveUserFromRoom(leaveRequest.Username)
-			if err != nil {
-				log.Printf("Error removing user from room: %v", err)
-				continue
-			}
-
-			// Notify all clients about updated online users
-			m.broadcastOnlineUsers()
-
-			// moves
-		case "game_move":
-			var moveData struct {
-				GameID       string      `json:"gameId"`
-				FromUserID   string      `json:"fromUserId"`
-				ToUserID     string      `json:"toUserId"`
-				ToUsername   string      `json:"toUsername"`
-				Move         interface{} `json:"move"`
-				FEN          string      `json:"fen"`
-				IsWhitesTurn bool        `json:"isWhitesTurn"`
-			}
-
-			if err := json.Unmarshal([]byte(message.Content), &moveData); err != nil {
-				log.Printf("Error parsing move data: %v", err)
-				continue
-			}
-
-			// Récupérer la room
-			room, exists := m.roomManager.GetRoom(moveData.GameID)
-			if !exists {
-				log.Printf("Room not found: %s", moveData.GameID)
-				continue
-			}
-			if exists {
-				room.Timer.SwitchTurn()
-			}
-
-			// Mettre à jour l'état du jeu
-			room.mutex.Lock()
-			room.PositionFEN = moveData.FEN
-			room.IsWhitesTurn = moveData.IsWhitesTurn
-			room.mutex.Unlock()
-
-			// Envoyer le mouvement à l'autre joueur
-			if otherConn, exists := room.Connections[moveData.ToUsername]; exists {
-				if err := otherConn.WriteJSON(WebSocketMessage{
-					Type:    "game_move",
-					Content: message.Content,
-				}); err != nil {
-					log.Printf("Error sending move to other player: %v", err)
+			case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel", "room_leave":
+				var invitation InvitationMessage
+				if err := json.Unmarshal([]byte(msg.Content), &invitation); err != nil {
+					log.Printf("Error parsing invitation: %v", err)
+					return
 				}
-			} else {
-				log.Printf("Connection not found for player %s", moveData.ToUsername)
-			}
-		case "game_over_checkmate":
-			var gameOverData struct {
-				GameID   string `json:"gameId"`
-				Winner   string `json:"winner"`
-				Reason   string `json:"reason"`
-				WinnerID string `json:"winnerId"`
-			}
 
-			if err := json.Unmarshal([]byte(message.Content), &gameOverData); err != nil {
-				log.Printf("Error parsing Partie Terminée data: %v", err)
-				continue
-			}
-
-			m.cleanupPlayerFromPublicQueue(username)
-
-			// Récupérer la room
-			room, exists := m.roomManager.GetRoom(gameOverData.GameID)
-			if !exists {
-				log.Printf("Room not found: %s", gameOverData.GameID)
-				continue
-			}
-
-			room.IsGameOver = true
-
-			gameOverMessage := WebSocketMessage{
-				Type:    "game_over_checkmate",
-				Content: message.Content,
-			}
-
-			// Envoyer aux deux joueurs
-			for username, conn := range room.Connections {
-				if err := conn.WriteJSON(gameOverMessage); err != nil {
-					log.Printf("Error sending Partie Terminée notification to %s: %v", username, err)
-				}
-			}
-
-			// Arrêter le timer si nécessaire
-			if room.Timer != nil {
-				room.Timer.Stop()
-			}
-
-			//  Nettoyer la room après un délai 2 secondes
-			go func() {
-				time.Sleep(2 * time.Second)
-				m.roomManager.RemoveRoom(gameOverData.GameID)
-				for username := range room.Connections {
-					m.userStore.UpdateUserRoomStatus(username, false)
+				if err := m.handleInvitation(invitation); err != nil {
+					log.Printf("Failed to process invitation: %v", err)
 				}
 				m.broadcastOnlineUsers()
-			}()
 
-		case PublicGameRequest:
-			user, err := m.userStore.GetUser(username)
-			if err != nil {
-				continue
+			case "leave_room":
+				var leaveRequest struct {
+					Username string `json:"username"`
+				}
+				if err := json.Unmarshal([]byte(msg.Content), &leaveRequest); err != nil {
+					log.Printf("Error parsing leave room request: %v", err)
+					return
+				}
+
+				m.cleanupPlayerFromPublicQueue(username)
+
+				_, err := m.RemoveUserFromRoom(leaveRequest.Username)
+				if err != nil {
+					log.Printf("Error removing user from room: %v", err)
+					return
+				}
+
+				// Notify all clients about updated online users
+				m.broadcastOnlineUsers()
+
+				// moves
+			case "game_move":
+				var moveData struct {
+					GameID       string      `json:"gameId"`
+					FromUserID   string      `json:"fromUserId"`
+					ToUserID     string      `json:"toUserId"`
+					ToUsername   string      `json:"toUsername"`
+					Move         interface{} `json:"move"`
+					FEN          string      `json:"fen"`
+					IsWhitesTurn bool        `json:"isWhitesTurn"`
+				}
+
+				if err := json.Unmarshal([]byte(msg.Content), &moveData); err != nil {
+					log.Printf("Error parsing move data: %v", err)
+					return
+				}
+
+				// Récupérer la room avec un verrou en lecture
+				m.roomManager.mutex.RLock()
+				room, exists := m.roomManager.rooms[moveData.GameID]
+				m.roomManager.mutex.RUnlock()
+
+				if !exists {
+					log.Printf("Room not found: %s", moveData.GameID)
+					return
+				}
+
+				// Utiliser un verrou plus fin pour la mise à jour de la room
+				room.mutex.Lock()
+				room.PositionFEN = moveData.FEN
+				room.IsWhitesTurn = !moveData.IsWhitesTurn
+
+				// Copier les informations nécessaires
+				targetConn := room.Connections[moveData.ToUsername]
+				timer := room.Timer
+				room.mutex.Unlock()
+
+				if targetConn != nil {
+					moveMessage := WebSocketMessage{
+						Type:    "game_move",
+						Content: msg.Content,
+					}
+
+					// Envoyer le mouvement de manière asynchrone
+					go func() {
+						if err := targetConn.WriteJSON(moveMessage); err != nil {
+							log.Printf("Error sending move to player %s: %v", moveData.ToUsername, err)
+						}
+					}()
+
+					// Changer le tour de manière asynchrone
+					if timer != nil {
+						go timer.SwitchTurn()
+					}
+				}
+
+			case "game_over_checkmate":
+				var gameOverData struct {
+					GameID   string `json:"gameId"`
+					Winner   string `json:"winner"`
+					Reason   string `json:"reason"`
+					WinnerID string `json:"winnerId"`
+				}
+
+				if err := json.Unmarshal([]byte(msg.Content), &gameOverData); err != nil {
+					log.Printf("Error parsing Partie Terminée data: %v", err)
+					return
+				}
+
+				m.cleanupPlayerFromPublicQueue(username)
+
+				// Récupérer la room
+				room, exists := m.roomManager.GetRoom(gameOverData.GameID)
+				if !exists {
+					log.Printf("Room not found: %s", gameOverData.GameID)
+					return
+				}
+
+				room.IsGameOver = true
+
+				gameOverMessage := WebSocketMessage{
+					Type:    "game_over_checkmate",
+					Content: msg.Content,
+				}
+
+				// Envoyer aux deux joueurs
+				for username, conn := range room.Connections {
+					if err := conn.WriteJSON(gameOverMessage); err != nil {
+						log.Printf("Error sending Partie Terminée notification to %s: %v", username, err)
+					}
+				}
+
+				// Arrêter le timer si nécessaire
+				if room.Timer != nil {
+					room.Timer.Stop()
+				}
+
+				//  Nettoyer la room après un délai 2 secondes
+				go func() {
+					time.Sleep(2 * time.Second)
+					m.roomManager.RemoveRoom(gameOverData.GameID)
+					for username := range room.Connections {
+						m.userStore.UpdateUserRoomStatus(username, false)
+					}
+					m.broadcastOnlineUsers()
+				}()
+
+			case PublicGameRequest:
+				user, err := m.userStore.GetUser(username)
+				if err != nil {
+					return
+				}
+				safeConn := NewSafeConn(conn)
+				m.handlePublicGameRequest(username, user.ID, safeConn)
+
+			case PublicQueueLeave:
+				m.handlePublicQueueLeave(username)
+
+			default:
+				log.Printf("Unhandled message type: %s", msg.Type)
+				m.broadcastOnlineUsers()
 			}
-			safeConn := NewSafeConn(conn)
-			m.handlePublicGameRequest(username, user.ID, safeConn)
 
-		case PublicQueueLeave:
-			m.handlePublicQueueLeave(username)
-
-		default:
-			log.Printf("Unhandled message type: %s", message.Type)
-			m.broadcastOnlineUsers()
-		}
+		}(message)
 	}
 }
 
@@ -587,3 +601,159 @@ func (m *OnlineUsersManager) getCurrentOnlineUsers() []OnlineUser {
 	}
 	return onlineUsers
 }
+
+
+
+
+
+		// 	switch message.Type {
+		// 	case "request_online_users":
+
+		// 		onlineUsers := m.getCurrentOnlineUsers()
+		// 		conn.WriteJSON(WebSocketMessage{
+		// 			Type:    "online_users",
+		// 			Content: string(mustJson(onlineUsers)),
+		// 		})
+
+		// 	case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel", "room_leave":
+		// 		var invitation InvitationMessage
+		// 		if err := json.Unmarshal([]byte(message.Content), &invitation); err != nil {
+		// 			log.Printf("Error parsing invitation: %v", err)
+		// 			continue
+		// 		}
+
+		// 		if err := m.handleInvitation(invitation); err != nil {
+		// 			log.Printf("Failed to process invitation: %v", err)
+		// 		}
+		// 		m.broadcastOnlineUsers()
+
+		// 	case "leave_room":
+		// 		var leaveRequest struct {
+		// 			Username string `json:"username"`
+		// 		}
+		// 		if err := json.Unmarshal([]byte(message.Content), &leaveRequest); err != nil {
+		// 			log.Printf("Error parsing leave room request: %v", err)
+		// 			continue
+		// 		}
+
+		// 		m.cleanupPlayerFromPublicQueue(username)
+
+		// 		_, err := m.RemoveUserFromRoom(leaveRequest.Username)
+		// 		if err != nil {
+		// 			log.Printf("Error removing user from room: %v", err)
+		// 			continue
+		// 		}
+
+		// 		// Notify all clients about updated online users
+		// 		m.broadcastOnlineUsers()
+
+		// 		// moves
+		// 	case "game_move":
+		// 		var moveData struct {
+		// 			GameID       string      `json:"gameId"`
+		// 			FromUserID   string      `json:"fromUserId"`
+		// 			ToUserID     string      `json:"toUserId"`
+		// 			ToUsername   string      `json:"toUsername"`
+		// 			Move         interface{} `json:"move"`
+		// 			FEN          string      `json:"fen"`
+		// 			IsWhitesTurn bool        `json:"isWhitesTurn"`
+		// 		}
+
+		// 		if err := json.Unmarshal([]byte(message.Content), &moveData); err != nil {
+		// 			log.Printf("Error parsing move data: %v", err)
+		// 			continue
+		// 		}
+
+		// 		// Récupérer la room
+		// 		room, exists := m.roomManager.GetRoom(moveData.GameID)
+		// 		if !exists {
+		// 			log.Printf("Room not found: %s", moveData.GameID)
+		// 			continue
+		// 		}
+		// 		if exists {
+		// 			room.Timer.SwitchTurn()
+		// 		}
+
+		// 		// Mettre à jour l'état du jeu
+		// 		room.mutex.Lock()
+		// 		room.PositionFEN = moveData.FEN
+		// 		room.IsWhitesTurn = moveData.IsWhitesTurn
+		// 		room.mutex.Unlock()
+
+		// 		// Envoyer le mouvement à l'autre joueur
+		// 		if otherConn, exists := room.Connections[moveData.ToUsername]; exists {
+		// 			if err := otherConn.WriteJSON(WebSocketMessage{
+		// 				Type:    "game_move",
+		// 				Content: message.Content,
+		// 			}); err != nil {
+		// 				log.Printf("Error sending move to other player: %v", err)
+		// 			}
+		// 		} else {
+		// 			log.Printf("Connection not found for player %s", moveData.ToUsername)
+		// 		}
+		// 	case "game_over_checkmate":
+		// 		var gameOverData struct {
+		// 			GameID   string `json:"gameId"`
+		// 			Winner   string `json:"winner"`
+		// 			Reason   string `json:"reason"`
+		// 			WinnerID string `json:"winnerId"`
+		// 		}
+
+		// 		if err := json.Unmarshal([]byte(message.Content), &gameOverData); err != nil {
+		// 			log.Printf("Error parsing Partie Terminée data: %v", err)
+		// 			continue
+		// 		}
+
+		// 		m.cleanupPlayerFromPublicQueue(username)
+
+		// 		// Récupérer la room
+		// 		room, exists := m.roomManager.GetRoom(gameOverData.GameID)
+		// 		if !exists {
+		// 			log.Printf("Room not found: %s", gameOverData.GameID)
+		// 			continue
+		// 		}
+
+		// 		room.IsGameOver = true
+
+		// 		gameOverMessage := WebSocketMessage{
+		// 			Type:    "game_over_checkmate",
+		// 			Content: message.Content,
+		// 		}
+
+		// 		// Envoyer aux deux joueurs
+		// 		for username, conn := range room.Connections {
+		// 			if err := conn.WriteJSON(gameOverMessage); err != nil {
+		// 				log.Printf("Error sending Partie Terminée notification to %s: %v", username, err)
+		// 			}
+		// 		}
+
+		// 		// Arrêter le timer si nécessaire
+		// 		if room.Timer != nil {
+		// 			room.Timer.Stop()
+		// 		}
+
+		// 		//  Nettoyer la room après un délai 2 secondes
+		// 		go func() {
+		// 			time.Sleep(2 * time.Second)
+		// 			m.roomManager.RemoveRoom(gameOverData.GameID)
+		// 			for username := range room.Connections {
+		// 				m.userStore.UpdateUserRoomStatus(username, false)
+		// 			}
+		// 			m.broadcastOnlineUsers()
+		// 		}()
+
+		// 	case PublicGameRequest:
+		// 		user, err := m.userStore.GetUser(username)
+		// 		if err != nil {
+		// 			continue
+		// 		}
+		// 		safeConn := NewSafeConn(conn)
+		// 		m.handlePublicGameRequest(username, user.ID, safeConn)
+
+		// 	case PublicQueueLeave:
+		// 		m.handlePublicQueueLeave(username)
+
+		// 	default:
+		// 		log.Printf("Unhandled message type: %s", message.Type)
+		// 		m.broadcastOnlineUsers()
+		// 	}

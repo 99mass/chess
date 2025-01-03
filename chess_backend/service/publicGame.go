@@ -72,13 +72,35 @@ func (m *OnlineUsersManager) handlePublicGameRequest(username string, userID str
 		m.publicQueue.mutex.Unlock()
 
 		// Créer une invitation pour la partie
-		invitation := InvitationMessage{
-			Type:         InvitationAccept,
-			FromUserID:   opponent.UserID,
-			FromUsername: opponent.Username,
-			ToUserID:     userID,
-			ToUsername:   username,
-			RoomID:       GenerateUniqueID(),
+		// invitation := InvitationMessage{
+		// 	Type:         InvitationAccept,
+		// 	FromUserID:   opponent.UserID,
+		// 	FromUsername: opponent.Username,
+		// 	ToUserID:     userID,
+		// 	ToUsername:   username,
+		// 	RoomID:       GenerateUniqueID(),
+		// }
+		isOpponentWhite := time.Now().UnixNano()%2 == 0
+
+		var invitation InvitationMessage
+		if isOpponentWhite {
+			invitation = InvitationMessage{
+				Type:         InvitationAccept,
+				FromUserID:   opponent.UserID, // Blanc
+				FromUsername: opponent.Username,
+				ToUserID:     userID, // Noir
+				ToUsername:   username,
+				RoomID:       GenerateUniqueID(),
+			}
+		} else {
+			invitation = InvitationMessage{
+				Type:         InvitationAccept,
+				FromUserID:   userID, // Blanc
+				FromUsername: username,
+				ToUserID:     opponent.UserID, // Noir
+				ToUsername:   opponent.Username,
+				RoomID:       GenerateUniqueID(),
+			}
 		}
 
 		// Créer la room et démarrer la partie
@@ -91,7 +113,7 @@ func (m *OnlineUsersManager) handlePublicGameRequest(username string, userID str
 		// Préparation des états de jeu spécifiques pour chaque joueur
 		baseGameState := map[string]interface{}{
 			"gameId":         room.RoomID,
-			"gameCreatorUid": opponent.UserID, // Premier joueur = créateur
+			"gameCreatorUid": invitation.FromUserID, // Premier joueur = créateur
 			"positonFen":     room.PositionFEN,
 			"whitesTime":     room.WhitesTime,
 			"blacksTime":     room.BlacksTime,
@@ -102,10 +124,19 @@ func (m *OnlineUsersManager) handlePublicGameRequest(username string, userID str
 		}
 
 		// État pour le premier joueur (opponent - créateur)
-		player1GameState := copyAndAddUserInfo(baseGameState, opponent.UserID, username)
+		// player1GameState := copyAndAddUserInfo(baseGameState, opponent.UserID, username)
 
-		// État pour le second joueur
-		player2GameState := copyAndAddUserInfo(baseGameState, userID, opponent.Username)
+		// // État pour le second joueur
+		// player2GameState := copyAndAddUserInfo(baseGameState, userID, opponent.Username)
+
+		var player1GameState, player2GameState map[string]interface{}
+		if isOpponentWhite {
+			player1GameState = copyAndAddUserInfo(baseGameState, opponent.UserID, username)
+			player2GameState = copyAndAddUserInfo(baseGameState, userID, opponent.Username)
+		} else {
+			player1GameState = copyAndAddUserInfo(baseGameState, userID, opponent.Username)
+			player2GameState = copyAndAddUserInfo(baseGameState, opponent.UserID, username)
+		}
 
 		room.AddConnection(opponent.Username, opponent.Connection)
 		room.AddConnection(username, conn)
