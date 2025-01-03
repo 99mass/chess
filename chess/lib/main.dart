@@ -14,7 +14,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (_) => GameProvider()..loadUser(),
+          create: (_) => GameProvider()..loadUser(), 
         ),
       ],
       child: const MyApp(),

@@ -24,6 +24,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
   late WebSocketService _webSocketService;
   List<UserProfile> onlineUsers = [];
   bool _isInitializing = false;
+  String _searchQuery = '';
 
   StreamSubscription? _onlineUsersSubscription;
   StreamSubscription? _invitationsSubscription;
@@ -86,6 +87,13 @@ class _FriendListScreenState extends State<FriendListScreen> {
     });
   }
 
+  List<UserProfile> _getFilteredUsers() {
+    return onlineUsers
+        .where((user) =>
+            user.userName.toLowerCase().contains(_searchQuery.toLowerCase().trim()))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,6 +133,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
                     ),
                   ),
                 ),
+                _buildSearchBar(),
                 Expanded(
                   child: StreamBuilder<List<UserProfile>>(
                     stream: _gameProvider.onlineUsersStream,
@@ -155,18 +164,23 @@ class _FriendListScreenState extends State<FriendListScreen> {
                         return _buildEmptyMessage();
                       }
 
+                      final filteredUsers = _getFilteredUsers();
+                      if (filteredUsers.isEmpty) {
+                        return _buildEmptyMessage();
+                      }
+
                       return ListView.builder(
                         shrinkWrap: true,
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(16),
-                        itemCount: onlineUsers.length,
+                        itemCount: filteredUsers.length,
                         itemBuilder: (context, index) {
-                          return onlineUsers[index].userName ==
+                          return filteredUsers[index].userName ==
                                   _gameProvider.user.userName
-                              ? onlineUsers.length == 1
+                              ? filteredUsers.length == 1
                                   ? _buildEmptyMessage()
                                   : Container()
-                              : _buildFriendItem(context, onlineUsers[index]);
+                              : _buildFriendItem(context, filteredUsers[index]);
                         },
                       );
                     },
@@ -180,6 +194,10 @@ class _FriendListScreenState extends State<FriendListScreen> {
   Widget _buildFriendItem(BuildContext context, UserProfile user) {
     return GestureDetector(
       onTap: () async {
+        if (!_webSocketService.isConnected) {
+          showCustomSnackBarTop(context, "Fonctionnalité indisponible.");
+          return;
+        }
         _gameProvider.createInvitation(
             toUser: user, fromUser: _gameProvider.user);
 
@@ -247,6 +265,33 @@ class _FriendListScreenState extends State<FriendListScreen> {
     );
   }
 
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: ColorsConstants.colorBg2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ColorsConstants.colorBg3, width: 1),
+      ),
+      child: TextField(
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Rechercher un adversaire...',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          prefixIcon: const Icon(Icons.search, color: Colors.white),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+      ),
+    );
+  }
+
   Widget _buildEmptyMessage() {
     return Padding(
       padding: const EdgeInsets.only(top: 50.0, left: 20.0, right: 20.0),
@@ -260,7 +305,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
             height: 100,
           ),
           const Text(
-            'Aucun utilisateur en ligne pour le moment.\nEn attendant, amusez-vous à jouer contre notre IA en cliquant sur le bouton ci-dessous !',
+            'Aucun utilisateur trouve.\nEn attendant, amusez-vous à jouer contre notre IA en cliquant sur le bouton ci-dessous !',
             style: TextStyle(color: ColorsConstants.white, fontSize: 16),
             textAlign: TextAlign.center,
           ),

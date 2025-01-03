@@ -113,24 +113,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     });
   }
 
-
   void _handleComputerModeClick() {
     _gameProvider.setCompturMode(value: true);
     Navigator.push(context, CustomPageRoute(child: const GameTimeScreen()));
   }
 
   void _handleFriendsModeClick() async {
-
     if (!_webSocketService.isConnected) {
-      // Tentative de reconnexion avant d'accéder aux fonctionnalités en ligne
-      bool connected = await _webSocketService.initializeConnection(context);
-      if (!connected) {
-        if (mounted) {
-          showCustomSnackBarTop(context,
-              "Connexion impossible. Veuillez réessayer.");
-        }
-        return;
-      }
+      showCustomSnackBarTop(context, "Fonctionnalité indisponible.");
+      return;
     }
     _gameProvider.setInvitationCancel(value: false);
     _gameProvider.setFriendsMode(value: true);
@@ -140,17 +131,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _handleOnlineModeClick() async {
-
     if (!_webSocketService.isConnected) {
-      // Tentative de reconnexion avant d'accéder aux fonctionnalités en ligne
-      bool connected = await _webSocketService.initializeConnection(context);
-      if (!connected) {
-        if (mounted) {
-          showCustomSnackBarTop(context,
-              "Connexion impossible. Veuillez réessayer.");
-        }
-        return;
-      }
+      showCustomSnackBarTop(context, "Fonctionnalité indisponible.");
+      return;
     }
 
     _webSocketService.sendMessage(json.encode({'type': 'public_game_request'}));
@@ -224,69 +207,72 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ],
       ),
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          color: ColorsConstants.colorBg,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (_isInitializing)
-              const Column(
-                children: [
-                  CustomImageSpinner(
-                    size: 30.0,
-                    duration: Duration(seconds: 2),
+      body: SingleChildScrollView(
+        child: Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: ColorsConstants.colorBg,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (_isInitializing)
+                const Column(
+                  children: [
+                    CustomImageSpinner(
+                      size: 30.0,
+                      duration: Duration(seconds: 2),
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'Connexion en cours...',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              Container(
+                width: 80,
+                height: 80,
+                margin: const EdgeInsets.only(top: 50),
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/chess_logo.png'),
+                    fit: BoxFit.contain,
                   ),
-                  SizedBox(height: 20),
-                  Text(
-                    'Connexion en cours...',
-                    style: TextStyle(color: Colors.white),
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Nouvelle partie',
+                    style:
+                        TextStyle(fontSize: 25, color: ColorsConstants.white),
+                  ),
+                  const SizedBox(height: 40),
+                  _buildMenuButton(
+                    'Jouer en ligne',
+                    'icons8_online.png',
+                    onTap: _handleOnlineModeClick,
+                  ),
+                  const SizedBox(height: 15),
+                  _buildMenuButton(
+                    'Jouer avec des amis',
+                    'icons8_handshake.png',
+                    onTap: _handleFriendsModeClick,
+                  ),
+                  const SizedBox(height: 15),
+                  _buildMenuButton(
+                    'Jouer avec l\'ordinateur',
+                    'icons8_ai.png',
+                    onTap: _handleComputerModeClick,
                   ),
                 ],
               ),
-            Container(
-              width: 80,
-              height: 80,
-              margin: const EdgeInsets.only(top: 50),
-              decoration: const BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/chess_logo.png'),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 20),
-                const Text(
-                  'Nouvelle partie',
-                  style: TextStyle(fontSize: 25, color: ColorsConstants.white),
-                ),
-                const SizedBox(height: 40),
-                _buildMenuButton(
-                  'Jouer en ligne',
-                  'icons8_online.png',
-                  onTap: _handleOnlineModeClick,
-                ),
-                const SizedBox(height: 15),
-                _buildMenuButton(
-                  'Jouer avec des amis',
-                  'icons8_handshake.png',
-                  onTap: _handleFriendsModeClick,
-                ),
-                const SizedBox(height: 15),
-                _buildMenuButton(
-                  'Jouer avec l\'ordinateur',
-                  'icons8_ai.png',
-                  onTap: _handleComputerModeClick,
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
