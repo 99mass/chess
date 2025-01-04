@@ -71,36 +71,13 @@ func (m *OnlineUsersManager) handlePublicGameRequest(username string, userID str
 		opponent.Timer.Stop()
 		m.publicQueue.mutex.Unlock()
 
-		// Créer une invitation pour la partie
-		// invitation := InvitationMessage{
-		// 	Type:         InvitationAccept,
-		// 	FromUserID:   opponent.UserID,
-		// 	FromUsername: opponent.Username,
-		// 	ToUserID:     userID,
-		// 	ToUsername:   username,
-		// 	RoomID:       GenerateUniqueID(),
-		// }
-		isOpponentWhite := time.Now().UnixNano()%2 == 0
-
-		var invitation InvitationMessage
-		if isOpponentWhite {
-			invitation = InvitationMessage{
-				Type:         InvitationAccept,
-				FromUserID:   opponent.UserID, // Blanc
-				FromUsername: opponent.Username,
-				ToUserID:     userID, // Noir
-				ToUsername:   username,
-				RoomID:       GenerateUniqueID(),
-			}
-		} else {
-			invitation = InvitationMessage{
-				Type:         InvitationAccept,
-				FromUserID:   userID, // Blanc
-				FromUsername: username,
-				ToUserID:     opponent.UserID, // Noir
-				ToUsername:   opponent.Username,
-				RoomID:       GenerateUniqueID(),
-			}
+		invitation := InvitationMessage{
+			Type:         InvitationAccept,
+			FromUserID:   opponent.UserID, // Blanc
+			FromUsername: opponent.Username,
+			ToUserID:     userID, // Noir
+			ToUsername:   username,
+			RoomID:       GenerateUniqueID(),
 		}
 
 		// Créer la room et démarrer la partie
@@ -123,20 +100,10 @@ func (m *OnlineUsersManager) handlePublicGameRequest(username string, userID str
 			"winnerId":       "",
 		}
 
-		// État pour le premier joueur (opponent - créateur)
-		// player1GameState := copyAndAddUserInfo(baseGameState, opponent.UserID, username)
-
-		// // État pour le second joueur
-		// player2GameState := copyAndAddUserInfo(baseGameState, userID, opponent.Username)
-
 		var player1GameState, player2GameState map[string]interface{}
-		if isOpponentWhite {
-			player1GameState = copyAndAddUserInfo(baseGameState, opponent.UserID, username)
-			player2GameState = copyAndAddUserInfo(baseGameState, userID, opponent.Username)
-		} else {
-			player1GameState = copyAndAddUserInfo(baseGameState, userID, opponent.Username)
-			player2GameState = copyAndAddUserInfo(baseGameState, opponent.UserID, username)
-		}
+
+		player1GameState = copyAndAddUserInfo(baseGameState, opponent.UserID, username)
+		player2GameState = copyAndAddUserInfo(baseGameState, userID, opponent.Username)
 
 		room.AddConnection(opponent.Username, opponent.Connection)
 		room.AddConnection(username, conn)

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as Math;
 
+import 'package:chess/constant/constants.dart';
 import 'package:chess/screens/friend_list_screen.dart';
 import 'package:chess/screens/main_menu_screen.dart';
 import 'package:chess/utils/custom_page_route.dart';
@@ -244,9 +245,6 @@ class WebSocketService {
 
         case 'room_closed':
           if (context != null) {
-            final Map<String, dynamic> roomData = json.decode(data['content']);
-            final fromUsername = roomData['fromUsername'];
-
             final gameProvider =
                 Provider.of<GameProvider>(context, listen: false);
 
@@ -264,7 +262,7 @@ class WebSocketService {
                   builder: (BuildContext dialogContext) => CustomAlertDialog(
                     titleMessage: "Partie Terminée",
                     subtitleMessage:
-                        'Vous avez gagné, $fromUsername a abandonné la partie.',
+                        'Vous avez gagné, Votre adversaire a abandonné la partie.',
                     typeDialog: 0,
                   ),
                 );
@@ -343,26 +341,33 @@ class WebSocketService {
               gameProvider.setIsloading(false);
 
               String message = '';
+              String reason = '';
               if (gameOverData['winner'] == "Draw") {
                 message = gameOverData['reason'];
+                // victoires/défaites
+              } else if ((gameOverData['winner'] == "Black" &&
+                      gameProvider.playerColor == PlayerColor.black) ||
+                  (gameOverData['winner'] == "White" &&
+                      gameProvider.playerColor == PlayerColor.white)) {
+                reason = gameOverData['reason'];
+
+                message = reason.isEmpty
+                    ? 'Félicitations ! Vous avez gagné la partie !'
+                    : 'Félicitations ! Vous avez gagné $reason !';
               } else {
-                // Pour les victoires/défaites
-                String raison = gameOverData['reason'];
-                if (gameOverData['winnerId'] == gameProvider.user.id) {
-                  message = raison.isEmpty
-                      ? 'Félicitations ! Vous avez gagné la partie !'
-                      : 'Félicitations ! Vous avez gagné $raison !';
-                } else {
-                  message = raison.isEmpty
-                      ? 'Dommage, vous avez perdu la partie !'
-                      : 'Dommage, votre adversaire a gagné $raison !';
-                }
+                reason = gameOverData['reason'];
+                message = reason.isEmpty
+                    ? 'Dommage, vous avez perdu la partie !'
+                    : 'Dommage, votre adversaire a gagné $reason !';
               }
 
               // Déterminer le logo approprié
               String logo = gameOverData['winner'] == "Draw"
                   ? 'assets/chess_logo.png'
-                  : (gameOverData['winnerId'] == gameProvider.user.id
+                  : ((gameOverData['winner'] == "Black" &&
+                              gameProvider.playerColor == PlayerColor.black) ||
+                          (gameOverData['winner'] == "White" &&
+                              gameProvider.playerColor == PlayerColor.white)
                       ? 'assets/icons8_crown.png'
                       : 'assets/icons8_lose.png');
 

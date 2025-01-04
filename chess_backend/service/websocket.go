@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -25,7 +26,7 @@ func NewOnlineUsersManager(userStore *UserStore) *OnlineUsersManager {
 			waitingPlayers: make(map[string]*QueuedPlayer),
 		},
 	}
-	// Créer le RoomManager avec une référence à l'OnlineUsersManager
+	
 	manager.roomManager = NewRoomManager(manager)
 	manager.tempRoomManager = NewTemporaryRoomManager()
 	return manager
@@ -58,7 +59,6 @@ func (m *OnlineUsersManager) HandleConnection(w http.ResponseWriter, r *http.Req
 
 	// Ajouter la connexion
 	m.mutex.Lock()
-	// m.connections[username] = conn
 	m.connections[username] = safeConn
 	m.mutex.Unlock()
 
@@ -120,7 +120,13 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 			log.Printf("WebSocket read error for %s: %v", username, err)
 			break
 		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+
 		go func(msg WebSocketMessage) {
+			defer wg.Done()
+
 			switch msg.Type {
 			case "request_online_users":
 
@@ -179,7 +185,7 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 					return
 				}
 
-				// Récupérer la room avec un verrou en lecture
+				// Récupérer la room avec verrou en lecture
 				m.roomManager.mutex.RLock()
 				room, exists := m.roomManager.rooms[moveData.GameID]
 				m.roomManager.mutex.RUnlock()
@@ -189,33 +195,17 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 					return
 				}
 
-				// Utiliser un verrou plus fin pour la mise à jour de la room
-				room.mutex.Lock()
-				room.PositionFEN = moveData.FEN
-				room.IsWhitesTurn = !moveData.IsWhitesTurn
-
-				// Copier les informations nécessaires
-				targetConn := room.Connections[moveData.ToUsername]
-				timer := room.Timer
-				room.mutex.Unlock()
-
-				if targetConn != nil {
-					moveMessage := WebSocketMessage{
-						Type:    "game_move",
-						Content: msg.Content,
-					}
-
-					// Envoyer le mouvement de manière asynchrone
-					go func() {
-						if err := targetConn.WriteJSON(moveMessage); err != nil {
-							log.Printf("Error sending move to player %s: %v", moveData.ToUsername, err)
-						}
-					}()
-
-					// Changer le tour de manière asynchrone
-					if timer != nil {
-						go timer.SwitchTurn()
-					}
+				// Envoyer le mouvement avec la nouvelle méthode
+				if err := room.SendMove(moveData); err != nil {
+					log.Printf("Error sending move: %v", err)
+					// Optionnel: notifier le joueur de l'échec
+					conn.WriteJSON(WebSocketMessage{
+						Type: "move_error",
+						Content: string(mustJson(map[string]string{
+							"error": err.Error(),
+						})),
+					})
+					return
 				}
 
 			case "game_over_checkmate":
@@ -227,45 +217,60 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 				}
 
 				if err := json.Unmarshal([]byte(msg.Content), &gameOverData); err != nil {
-					log.Printf("Error parsing Partie Terminée data: %v", err)
+					log.Printf("Error parsing game over data: %v", err)
 					return
 				}
 
+				// Nettoyer la file d'attente publique d'abord
 				m.cleanupPlayerFromPublicQueue(username)
 
-				// Récupérer la room
+				// Récupérer la room avec un verrou
 				room, exists := m.roomManager.GetRoom(gameOverData.GameID)
 				if !exists {
 					log.Printf("Room not found: %s", gameOverData.GameID)
 					return
 				}
 
+				// Marquer la partie comme terminée
+				room.mutex.Lock()
 				room.IsGameOver = true
+				room.WinnerID = gameOverData.WinnerID
+				connections := make(map[string]*SafeConn, len(room.Connections))
+				for k, v := range room.Connections {
+					connections[k] = v
+				}
+				room.mutex.Unlock()
 
+				// Arrêter le timer immédiatement
+				if room.Timer != nil {
+					room.Timer.Stop()
+				}
+
+				// Envoyer le message de fin de partie à tous les joueurs
 				gameOverMessage := WebSocketMessage{
 					Type:    "game_over_checkmate",
 					Content: msg.Content,
 				}
 
-				// Envoyer aux deux joueurs
-				for username, conn := range room.Connections {
+				for username, conn := range connections {
 					if err := conn.WriteJSON(gameOverMessage); err != nil {
-						log.Printf("Error sending Partie Terminée notification to %s: %v", username, err)
+						log.Printf("Error sending game over notification to %s: %v", username, err)
 					}
 				}
 
-				// Arrêter le timer si nécessaire
-				if room.Timer != nil {
-					room.Timer.Stop()
-				}
-
-				//  Nettoyer la room après un délai 2 secondes
+				// Nettoyer la room après un délai
 				go func() {
 					time.Sleep(2 * time.Second)
-					m.roomManager.RemoveRoom(gameOverData.GameID)
-					for username := range room.Connections {
+
+					// Mettre à jour le statut des joueurs
+					for username := range connections {
 						m.userStore.UpdateUserRoomStatus(username, false)
 					}
+
+					// Supprimer la room
+					m.roomManager.RemoveSpecificRoom(gameOverData.GameID)
+
+					// Broadcast la mise à jour
 					m.broadcastOnlineUsers()
 				}()
 
@@ -286,6 +291,8 @@ func (m *OnlineUsersManager) handleClientConnection(username string, conn *webso
 			}
 
 		}(message)
+
+		wg.Wait()
 	}
 }
 
@@ -303,9 +310,32 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		return fmt.Errorf("one or both users not online")
 	}
 
+	if invitation.Type == RoomLeave {
+		m.roomManager.mutex.RLock()
+		room, exists := m.roomManager.rooms[invitation.RoomID]
+		m.roomManager.mutex.RUnlock()
+
+		if !exists {
+			log.Printf("Room %s not found for leave operation", invitation.RoomID)
+			return nil // Retourner nil car la room n'existe déjà plus
+		}
+
+		// Vérifier si l'utilisateur appartient à cette room
+		if room.WhitePlayer.Username != invitation.FromUsername &&
+			room.BlackPlayer.Username != invitation.FromUsername {
+			return fmt.Errorf("user %s not found in room %s",
+				invitation.FromUsername, invitation.RoomID)
+		}
+	}
+
 	switch invitation.Type {
 
 	case InvitationSend:
+
+		if invitation.RoomID == "" {
+			invitation.RoomID = GenerateUniqueID()
+		}
+
 		// Créer le timer
 		timeout := NewInvitationTimeout(invitation.RoomID, 20*time.Second, func() {
 			// Fonction appelée quand le timeout expire
@@ -442,33 +472,44 @@ func (m *OnlineUsersManager) handleInvitation(invitation InvitationMessage) erro
 		return nil
 
 	case RoomLeave:
-
-		// Retrieve the room
+		// Récupérer la room spécifique
 		room, exists := m.roomManager.GetRoom(invitation.RoomID)
 		if !exists {
-			log.Printf("Room %s not found during leave", invitation.RoomID)
-			return fmt.Errorf("room not found")
+			return nil // La room n'existe déjà plus
 		}
 
-		// Arrêter le timer avant de fermer la room
+		// Arrêter le timer avant tout
 		if room.Timer != nil {
 			room.Timer.Stop()
 		}
 
-		// Notify the other player about room closure
-		m.notifyRoomClosure(invitation)
-
-		// Remove the room
-		m.roomManager.RemoveRoom(invitation.RoomID)
-		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
-
-		// If the other player is still in the room, update their status too
+		// Notifier l'autre joueur avant de supprimer la room
 		otherUsername, found := room.GetOtherPlayer(invitation.FromUsername)
+		if found {
+			if conn, exists := room.Connections[otherUsername]; exists {
+				closeMsg := WebSocketMessage{
+					Type: "room_closed",
+					Content: string(mustJson(map[string]string{
+						"room_id": invitation.RoomID,
+						"reason":  "opponent_left",
+					})),
+				}
+				conn.WriteJSON(closeMsg)
+			}
+		}
+
+		// Mettre à jour les statuts des joueurs
+		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
 		if found {
 			m.userStore.UpdateUserRoomStatus(otherUsername, false)
 		}
-		m.userStore.UpdateUserRoomStatus(invitation.FromUsername, false)
-		m.userStore.UpdateUserRoomStatus(invitation.ToUsername, false)
+
+		// Supprimer uniquement cette room
+		m.roomManager.RemoveSpecificRoom(invitation.RoomID)
+
+		// Broadcast la mise à jour des utilisateurs
+		m.broadcastOnlineUsers()
+
 	}
 
 	return nil
@@ -496,43 +537,6 @@ func (us *UserStore) UpdateUserRoomStatus(username string, isInRoom bool) error 
 	us.Users[username] = user
 
 	return us.Save()
-}
-
-func (m *OnlineUsersManager) notifyRoomClosure(invitation InvitationMessage) {
-	// Try to find the room first
-	room, exists := m.roomManager.GetRoom(invitation.RoomID)
-	if !exists {
-		log.Printf("Room %s not found when trying to notify closure", invitation.RoomID)
-		return
-	}
-
-	// Find the other player's username
-	otherUsername, found := room.GetOtherPlayer(invitation.FromUsername)
-	if !found {
-		log.Printf("Could not find other player in room %s", invitation.RoomID)
-		return
-	}
-
-	// Check if the other player is connected
-	conn, exists := m.connections[otherUsername]
-	if !exists {
-		log.Printf("Other player %s not connected", otherUsername)
-		return
-	}
-
-	// Prepare and send the closure message
-	closureMessage := WebSocketMessage{
-		Type: "room_closed",
-		Content: string(mustJson(map[string]string{
-			"room_id":      invitation.RoomID,
-			"fromUsername": invitation.FromUsername,
-		})),
-	}
-
-	err := conn.WriteJSON(closureMessage)
-	if err != nil {
-		log.Printf("Error sending room closure message to %s: %v", otherUsername, err)
-	}
 }
 
 func (m *OnlineUsersManager) broadcastOnlineUsers() {
@@ -601,159 +605,3 @@ func (m *OnlineUsersManager) getCurrentOnlineUsers() []OnlineUser {
 	}
 	return onlineUsers
 }
-
-
-
-
-
-		// 	switch message.Type {
-		// 	case "request_online_users":
-
-		// 		onlineUsers := m.getCurrentOnlineUsers()
-		// 		conn.WriteJSON(WebSocketMessage{
-		// 			Type:    "online_users",
-		// 			Content: string(mustJson(onlineUsers)),
-		// 		})
-
-		// 	case "invitation_send", "invitation_accept", "invitation_reject", "invitation_cancel", "room_leave":
-		// 		var invitation InvitationMessage
-		// 		if err := json.Unmarshal([]byte(message.Content), &invitation); err != nil {
-		// 			log.Printf("Error parsing invitation: %v", err)
-		// 			continue
-		// 		}
-
-		// 		if err := m.handleInvitation(invitation); err != nil {
-		// 			log.Printf("Failed to process invitation: %v", err)
-		// 		}
-		// 		m.broadcastOnlineUsers()
-
-		// 	case "leave_room":
-		// 		var leaveRequest struct {
-		// 			Username string `json:"username"`
-		// 		}
-		// 		if err := json.Unmarshal([]byte(message.Content), &leaveRequest); err != nil {
-		// 			log.Printf("Error parsing leave room request: %v", err)
-		// 			continue
-		// 		}
-
-		// 		m.cleanupPlayerFromPublicQueue(username)
-
-		// 		_, err := m.RemoveUserFromRoom(leaveRequest.Username)
-		// 		if err != nil {
-		// 			log.Printf("Error removing user from room: %v", err)
-		// 			continue
-		// 		}
-
-		// 		// Notify all clients about updated online users
-		// 		m.broadcastOnlineUsers()
-
-		// 		// moves
-		// 	case "game_move":
-		// 		var moveData struct {
-		// 			GameID       string      `json:"gameId"`
-		// 			FromUserID   string      `json:"fromUserId"`
-		// 			ToUserID     string      `json:"toUserId"`
-		// 			ToUsername   string      `json:"toUsername"`
-		// 			Move         interface{} `json:"move"`
-		// 			FEN          string      `json:"fen"`
-		// 			IsWhitesTurn bool        `json:"isWhitesTurn"`
-		// 		}
-
-		// 		if err := json.Unmarshal([]byte(message.Content), &moveData); err != nil {
-		// 			log.Printf("Error parsing move data: %v", err)
-		// 			continue
-		// 		}
-
-		// 		// Récupérer la room
-		// 		room, exists := m.roomManager.GetRoom(moveData.GameID)
-		// 		if !exists {
-		// 			log.Printf("Room not found: %s", moveData.GameID)
-		// 			continue
-		// 		}
-		// 		if exists {
-		// 			room.Timer.SwitchTurn()
-		// 		}
-
-		// 		// Mettre à jour l'état du jeu
-		// 		room.mutex.Lock()
-		// 		room.PositionFEN = moveData.FEN
-		// 		room.IsWhitesTurn = moveData.IsWhitesTurn
-		// 		room.mutex.Unlock()
-
-		// 		// Envoyer le mouvement à l'autre joueur
-		// 		if otherConn, exists := room.Connections[moveData.ToUsername]; exists {
-		// 			if err := otherConn.WriteJSON(WebSocketMessage{
-		// 				Type:    "game_move",
-		// 				Content: message.Content,
-		// 			}); err != nil {
-		// 				log.Printf("Error sending move to other player: %v", err)
-		// 			}
-		// 		} else {
-		// 			log.Printf("Connection not found for player %s", moveData.ToUsername)
-		// 		}
-		// 	case "game_over_checkmate":
-		// 		var gameOverData struct {
-		// 			GameID   string `json:"gameId"`
-		// 			Winner   string `json:"winner"`
-		// 			Reason   string `json:"reason"`
-		// 			WinnerID string `json:"winnerId"`
-		// 		}
-
-		// 		if err := json.Unmarshal([]byte(message.Content), &gameOverData); err != nil {
-		// 			log.Printf("Error parsing Partie Terminée data: %v", err)
-		// 			continue
-		// 		}
-
-		// 		m.cleanupPlayerFromPublicQueue(username)
-
-		// 		// Récupérer la room
-		// 		room, exists := m.roomManager.GetRoom(gameOverData.GameID)
-		// 		if !exists {
-		// 			log.Printf("Room not found: %s", gameOverData.GameID)
-		// 			continue
-		// 		}
-
-		// 		room.IsGameOver = true
-
-		// 		gameOverMessage := WebSocketMessage{
-		// 			Type:    "game_over_checkmate",
-		// 			Content: message.Content,
-		// 		}
-
-		// 		// Envoyer aux deux joueurs
-		// 		for username, conn := range room.Connections {
-		// 			if err := conn.WriteJSON(gameOverMessage); err != nil {
-		// 				log.Printf("Error sending Partie Terminée notification to %s: %v", username, err)
-		// 			}
-		// 		}
-
-		// 		// Arrêter le timer si nécessaire
-		// 		if room.Timer != nil {
-		// 			room.Timer.Stop()
-		// 		}
-
-		// 		//  Nettoyer la room après un délai 2 secondes
-		// 		go func() {
-		// 			time.Sleep(2 * time.Second)
-		// 			m.roomManager.RemoveRoom(gameOverData.GameID)
-		// 			for username := range room.Connections {
-		// 				m.userStore.UpdateUserRoomStatus(username, false)
-		// 			}
-		// 			m.broadcastOnlineUsers()
-		// 		}()
-
-		// 	case PublicGameRequest:
-		// 		user, err := m.userStore.GetUser(username)
-		// 		if err != nil {
-		// 			continue
-		// 		}
-		// 		safeConn := NewSafeConn(conn)
-		// 		m.handlePublicGameRequest(username, user.ID, safeConn)
-
-		// 	case PublicQueueLeave:
-		// 		m.handlePublicQueueLeave(username)
-
-		// 	default:
-		// 		log.Printf("Unhandled message type: %s", message.Type)
-		// 		m.broadcastOnlineUsers()
-		// 	}

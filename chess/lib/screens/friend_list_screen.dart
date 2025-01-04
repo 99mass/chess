@@ -292,29 +292,33 @@ class _FriendListScreenState extends State<FriendListScreen> {
     );
   }
 
-  Widget _buildEmptyMessage() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 50.0, left: 20.0, right: 20.0),
+
+Widget _buildEmptyMessage() {
+  return SingleChildScrollView(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Image(
-            image: AssetImage('assets/icons8_empty.png'),
-            width: 100,
-            height: 100,
+          Image(
+            image: const AssetImage('assets/icons8_empty.png'),
+            width: 80, 
+            height: 80,
           ),
+          const SizedBox(height: 16), 
           const Text(
             'Aucun utilisateur trouve.\nEn attendant, amusez-vous à jouer contre notre IA en cliquant sur le bouton ci-dessous !',
             style: TextStyle(color: ColorsConstants.white, fontSize: 16),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16), 
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: ColorsConstants.colorBg2,
               foregroundColor: ColorsConstants.white,
-              minimumSize: const Size(150, 60),
+              minimumSize: const Size(150, 50),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -324,7 +328,7 @@ class _FriendListScreenState extends State<FriendListScreen> {
               'Jouer en solo',
               style: TextStyle(
                 color: ColorsConstants.white,
-                fontSize: 20,
+                fontSize: 18,
               ),
             ),
             onPressed: () {
@@ -334,10 +338,12 @@ class _FriendListScreenState extends State<FriendListScreen> {
               );
             },
           ),
+          const SizedBox(height: 16),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   @override
   void dispose() {

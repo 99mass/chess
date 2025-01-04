@@ -4,24 +4,6 @@
             "id": "740c31f7ee80590e652e2fd1d30ea9f6",
             "username": "Breukh",
             "isnOline": true,
-            "isInRoom": true
-        },
-        "Pixel 4": {
-            "id": "01ada52306558097e8975d8a6490cb54",
-            "username": "Pixel 4",
-            "isnOline": true,
-            "isInRoom": true
-        },
-        "Pixel 5": {
-            "id": "8cbfdb0d57e0d1af6c961d64c90d4ad9",
-            "username": "Pixel 5",
-            "isnOline": true,
-            "isInRoom": false
-        },
-        "Pixel 6": {
-            "id": "396ed6895797fb7a4c149c917f97c614",
-            "username": "Pixel 6",
-            "isnOline": true,
             "isInRoom": false
         }
     }

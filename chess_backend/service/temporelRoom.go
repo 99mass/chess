@@ -28,8 +28,16 @@ func (trm *TemporaryRoomManager) CreateTempRoom(invitation InvitationMessage, ti
 	trm.mutex.Lock()
 	defer trm.mutex.Unlock()
 
+	  // Si le RoomID n'est pas fourni dans l'invitation, en générer un nouveau
+	  roomID := invitation.RoomID
+	  if roomID == "" {
+		  roomID = GenerateUniqueID() // Générer un nouveau RoomID
+		  // Mettre à jour le RoomID dans l'invitation
+		  invitation.RoomID = roomID
+	  }
+
 	tempRoom := &TempRoom{
-		RoomID:  invitation.RoomID,
+		RoomID:  roomID,
 		Timeout: timeout,
 		WhitePlayer: OnlineUser{
 			ID:       invitation.FromUserID,
@@ -42,7 +50,7 @@ func (trm *TemporaryRoomManager) CreateTempRoom(invitation InvitationMessage, ti
 		CreatedAt: time.Now(),
 	}
 
-	trm.rooms[invitation.RoomID] = tempRoom
+	trm.rooms[roomID] = tempRoom
 	return tempRoom
 }
 

@@ -208,7 +208,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
     // Envoyer les commandes à Stockfish
     stockfish!.stdin =
         '${StockfishUicCommand.position} ${_gameProvider.getPositionFen()}';
-    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 200}';
+    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 100}';
 
     // Désabonner les anciens écouteurs s'il y en a
     _stockfishSubscription?.cancel();
@@ -640,7 +640,6 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
   @override
   void didChangeDependencies() {
-    // Store the reference safely here
     _gameProvider = Provider.of<GameProvider>(context, listen: false);
     super.didChangeDependencies();
   }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -15,6 +14,7 @@ type ChessTimer struct {
 	isRunning    bool
 	whiteSeconds int
 	blackSeconds int
+	roomID       string
 }
 
 type TimerUpdate struct {
@@ -30,6 +30,7 @@ func NewChessTimer(room *ChessGameRoom, initialTimeMinutes int) *ChessTimer {
 		stopChan:     make(chan struct{}),
 		whiteSeconds: initialTimeMinutes * 60,
 		blackSeconds: initialTimeMinutes * 60,
+		roomID:       room.RoomID,
 	}
 }
 
@@ -39,11 +40,6 @@ func (ct *ChessTimer) Start() {
 		ct.mutex.Unlock()
 		return
 	}
-
-	// S'assurer que IsWhitesTurn est à true au démarrage
-	ct.room.mutex.Lock()
-	ct.room.IsWhitesTurn = true
-	ct.room.mutex.Unlock()
 
 	ct.isRunning = true
 	ct.ticker = time.NewTicker(1 * time.Second)
@@ -60,21 +56,33 @@ func (ct *ChessTimer) runTimer() {
 		select {
 		case <-ct.ticker.C:
 			ct.mutex.Lock()
+
+			// Vérifier si la room existe toujours
+			if ct.room == nil {
+				ct.mutex.Unlock()
+				return
+			}
+
 			ct.room.mutex.RLock()
 			isWhitesTurn := ct.room.IsWhitesTurn
+			isGameOver := ct.room.IsGameOver
 			ct.room.mutex.RUnlock()
+
+			// Ne pas décrémenter si la partie est terminée
+			if isGameOver {
+				ct.mutex.Unlock()
+				continue
+			}
 
 			timeoutOccurred := false
 			var winner string
 
-			// Si c'est le tour des blancs, on décrémente le temps des blancs
 			if isWhitesTurn {
 				if ct.whiteSeconds <= 0 {
 					timeoutOccurred = true
 					winner = "black"
 				} else {
 					ct.whiteSeconds--
-					ct.room.WhitesTime = formatTime(ct.whiteSeconds)
 				}
 			} else {
 				if ct.blackSeconds <= 0 {
@@ -82,25 +90,28 @@ func (ct *ChessTimer) runTimer() {
 					winner = "white"
 				} else {
 					ct.blackSeconds--
-					ct.room.BlacksTime = formatTime(ct.blackSeconds)
 				}
 			}
 			ct.mutex.Unlock()
 
-			ct.broadcastTimeUpdate()
+			// Broadcast seulement si le timer est toujours actif
+			if ct.isRunning {
+				ct.broadcastTimeUpdate()
+			}
 
 			if timeoutOccurred {
-				go ct.handleTimeOut(winner)
+				ct.handleTimeOut(winner)
 				return
 			}
 
 		case <-ct.stopChan:
-			ct.ticker.Stop()
+			if ct.ticker != nil {
+				ct.ticker.Stop()
+			}
 			return
 		}
 	}
 }
-
 
 func (ct *ChessTimer) SwitchTurn() {
 	ct.mutex.Lock()
@@ -134,13 +145,16 @@ func (ct *ChessTimer) SwitchTurn() {
 }
 
 func (ct *ChessTimer) handleTimeOut(winner string) {
-	// Stop the timer first
+	// S'assurer que le timer est arrêté
 	ct.Stop()
 
-	// Lock the room for state updates
 	ct.room.mutex.Lock()
+	roomID := ct.room.RoomID
+	whiteUsername := ct.room.WhitePlayer.Username
+	blackUsername := ct.room.BlackPlayer.Username
+
+	// Marquer la partie comme terminée
 	ct.room.IsGameOver = true
-	ct.room.Status = RoomStatusFinished
 
 	if winner == "white" {
 		ct.room.WinnerID = ct.room.WhitePlayer.ID
@@ -148,65 +162,45 @@ func (ct *ChessTimer) handleTimeOut(winner string) {
 		ct.room.WinnerID = ct.room.BlackPlayer.ID
 	}
 
-	// Store usernames and room info before unlocking
-	whiteUsername := ct.room.WhitePlayer.Username
-	blackUsername := ct.room.BlackPlayer.Username
-	roomID := ct.room.RoomID
-
-	// Capture current connections before unlocking
+	// Copier les connexions nécessaires
 	connections := make(map[string]*SafeConn)
 	for username, conn := range ct.room.Connections {
 		connections[username] = conn
 	}
 	ct.room.mutex.Unlock()
 
-	// Create the game over message
+	// Envoyer le message de fin de partie
 	gameOver := map[string]interface{}{
-		"gameId":     roomID,
-		"winner":     winner,
-		"reason":     "timeout",
-		"whiteTime":  formatTime(ct.whiteSeconds),
-		"blackTime":  formatTime(ct.blackSeconds),
-		"winnerId":   ct.room.WinnerID,
-		"isGameOver": true,
-		"status":     string(RoomStatusFinished),
+		"gameId":    roomID,
+		"winner":    winner,
+		"reason":    "timeout",
+		"whiteTime": formatTime(ct.whiteSeconds),
+		"blackTime": formatTime(ct.blackSeconds),
+		"winnerId":  ct.room.WinnerID,
 	}
 
-	gameOverMsg := WebSocketMessage{
-		Type:    "game_over",
-		Content: string(mustJson(gameOver)),
-	}
-
-	// Send the message to all connections
+	// Envoyer aux deux joueurs
 	for _, conn := range connections {
-		if err := conn.WriteJSON(gameOverMsg); err != nil {
-			log.Printf("Error sending timeout message: %v", err)
-		}
+		conn.WriteJSON(WebSocketMessage{
+			Type:    "game_over",
+			Content: string(mustJson(gameOver)),
+		})
 	}
 
-	// Clean up the specific room after a short delay
+	// Nettoyer la room après un court délai
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-
 		if ct.room.onlineManager != nil {
-			// Remove only this room's players from public queue
+			// Nettoyer uniquement les joueurs de cette room
 			ct.room.onlineManager.cleanupPlayerFromPublicQueue(whiteUsername)
 			ct.room.onlineManager.cleanupPlayerFromPublicQueue(blackUsername)
 
-			// Update only these players' room status
+			// Mettre à jour le statut des joueurs
 			ct.room.onlineManager.userStore.UpdateUserRoomStatus(whiteUsername, false)
 			ct.room.onlineManager.userStore.UpdateUserRoomStatus(blackUsername, false)
 
-			// Remove only this room
-			ct.room.onlineManager.roomManager.RemoveRoom(roomID)
-
-			// Clear only this room's connections
-			ct.room.mutex.Lock()
-			ct.room.Connections = make(map[string]*SafeConn)
-			ct.room.mutex.Unlock()
-
-			// Broadcast updated online users
-			go ct.room.onlineManager.broadcastOnlineUsers()
+			// Supprimer uniquement cette room
+			ct.room.onlineManager.roomManager.RemoveSpecificRoom(roomID)
 		}
 	}()
 }
@@ -224,15 +218,24 @@ func (ct *ChessTimer) Stop() {
 
 func (ct *ChessTimer) broadcastTimeUpdate() {
 	ct.mutex.RLock()
+	defer ct.mutex.RUnlock()
+
+	// Vérifier si la room existe toujours
+	if ct.room == nil {
+		return
+	}
+
 	ct.room.mutex.RLock()
+	isWhitesTurn := ct.room.IsWhitesTurn
+	roomID := ct.room.RoomID
+	ct.room.mutex.RUnlock()
+
 	update := TimerUpdate{
-		RoomID:       ct.room.RoomID,
+		RoomID:       roomID,
 		WhiteTime:    ct.whiteSeconds,
 		BlackTime:    ct.blackSeconds,
-		IsWhitesTurn: ct.room.IsWhitesTurn,
+		IsWhitesTurn: isWhitesTurn,
 	}
-	ct.room.mutex.RUnlock()
-	ct.mutex.RUnlock()
 
 	message := WebSocketMessage{
 		Type:    "time_update",
