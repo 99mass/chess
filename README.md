@@ -7,9 +7,9 @@ Bienvenue dans notre version moderne du jeu d'échecs classique ! Cette applicat
 ### Modes de Jeu
 - 🤖 **VS Ordinateur** (IA Stockfish)
   - Niveaux de Difficulté : 
-    - Débutant : ELO 100
-    - Intermédiaire : ELO 200
-    - Avancé : ELO 300
+    - Débutant 
+    - Intermédiaire
+    - Avancé
 - 👥 **Mode Amis** - Jouez contre vos amis
 - 🌐 **Parties Publiques** - Affrontez des joueurs du monde entier
 
@@ -40,9 +40,9 @@ Bienvenue dans notre version moderne du jeu d'échecs classique ! Cette applicat
 
 ## 🤖 Implémentation de l'IA
 Le jeu intègre le moteur d'échecs Stockfish avec trois niveaux de difficulté :
-- 🟢 Débutant (ELO 100) - Parfait pour les nouveaux joueurs
-- 🟡 Intermédiaire (ELO 200) - Pour les joueurs en progression
-- 🔴 Avancé (ELO 300) - Pour les joueurs expérimentés
+- 🟢 Débutant- Parfait pour les nouveaux joueurs
+- 🟡 Intermédiaire - Pour les joueurs en progression
+- 🔴 Avancé - Pour les joueurs expérimentés
 
 ## ⚡ Installation
 Pour commencer à jouer, clonez le dépôt et suivez les instructions d'installation standard pour les applications Flutter et Go.

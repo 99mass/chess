@@ -1,34 +1,4 @@
 {
     "users": {
-        "Alo": {
-            "id": "b0ca8d47805127f9cdbcc1aaee5ecd90",
-            "username": "Alo",
-            "isnOline": false,
-            "isInRoom": false
-        },
-        "Breukh": {
-            "id": "740c31f7ee80590e652e2fd1d30ea9f6",
-            "username": "Breukh",
-            "isnOline": true,
-            "isInRoom": false
-        },
-        "Fall": {
-            "id": "788a6b912f7a7ec660071a0abbbed379",
-            "username": "Fall",
-            "isnOline": true,
-            "isInRoom": false
-        },
-        "Issa": {
-            "id": "d800db841e666f19106bd9c87ab75804",
-            "username": "Issa",
-            "isnOline": true,
-            "isInRoom": false
-        },
-        "Massamba": {
-            "id": "218e2702a7996885d833054e4b5b1f58",
-            "username": "Massamba",
-            "isnOline": true,
-            "isInRoom": false
-        }
     }
 }

@@ -129,67 +129,11 @@ class GameProvider extends ChangeNotifier {
     return result;
   }
 
-  // void handleGameOver(BuildContext context, {ChessTimer? chessTimer}) {
-  //   if (game.drawn || game.gameOver) {
-  //     _isGameEnd = true;
-  //     String message = '';
-  //     String logo = 'chess_logo.png';
-  //     print('game result: ${game.result}');
-  //     if (game.drawn) {
-  //       if (game.result == 'DrawnGameStalemate' ||
-  //           game.result == 'DrawnGameRepetition' ||
-  //           game.result == 'DrawnGameBothRoyalsDead' ||
-  //           game.result == 'DrawnGameInsufficientMaterial' ||
-  //           game.result == '1/2-1/2' ||
-  //           game.result == 'DrawnGameElimination') {
-  //         message =
-  //             "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
-  //       } else {
-  //         message =
-  //             "La partie se termine sur un match nul, vous avez tenue tête à l'Ordinateur!";
-  //       }
-  //     } else if (game.winner == Squares.white) {
-  //       message = _playerColor == Squares.white
-  //           ? 'Vous avez gagner la partie, bravo!'
-  //           : 'L\'ordinateur à gagner la partie, dommage!';
-  //       logo = _playerColor == Squares.white
-  //           ? 'assets/icons8_crown.png'
-  //           : 'assets/icons8_lose.png';
-  //     } else if (game.winner == Squares.black) {
-  //       message = _playerColor == Squares.black
-  //           ? 'Vous avez gagner la partie, bravo!'
-  //           : 'L\'ordinateur à gagner la partie, dommage!';
-  //       logo = _playerColor == Squares.black
-  //           ? 'assets/icons8_crown.png'
-  //           : 'assets/icons8_lose.png';
-  //     }
-  //     WidgetsBinding.instance.addPostFrameCallback((_) {
-  //       try {
-  //         _isLoading = false;
-  //         _friendsMode = false;
-  //         _onWillPop = true;
-  //         showDialog(
-  //           context: context,
-  //           barrierDismissible: false,
-  //           builder: (BuildContext dialogContext) => CustomAlertDialog(
-  //             titleMessage: "Partie Terminée",
-  //             subtitleMessage: message,
-  //             typeDialog: 0,
-  //             logo: logo,
-  //           ),
-  //         );
-  //       } catch (e) {
-  //         print('Erreur lors de l\'affichage du dialog: $e');
-  //       }
-  //     });
-  //   }
-  // }
-
   void handleGameOver(BuildContext context, {ChessTimer? chessTimer}) {
     if (game.drawn || game.gameOver) {
       _isGameEnd = true;
       String message = '';
-      String logo = 'chess_logo.png';
+      String logo = 'assets/chess_logo.png';
       print('game result: ${game.result}');
 
       if (game.result is bishop.DrawnGame) {
@@ -480,46 +424,6 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  // void handleGameOverFriends() {
-  //   if (game.drawn || game.gameOver) {
-  //     _isGameEnd = true;
-  //     String winner = '';
-  //     if (game.drawn) {
-  //       if (game.result == 'DrawnGameStalemate' ||
-  //           game.result == 'DrawnGameRepetition' ||
-  //           game.result == 'DrawnGameBothRoyalsDead' ||
-  //           game.result == 'DrawnGameInsufficientMaterial' ||
-  //           game.result == '1/2-1/2' ||
-  //           game.result == 'DrawnGameElimination') {
-  //         winner = 'Draw';
-  //       } else {
-  //         winner = 'Draw';
-  //       }
-  //     } else if (game.winner == Squares.white) {
-  //       winner = 'White';
-  //     } else if (game.winner == Squares.black) {
-  //       winner = 'Black';
-  //     }
-  //     if (_gameModel != null) {
-  //       final gameOverMessage = {
-  //         'type': 'game_over_checkmate',
-  //         'content': json.encode({
-  //           'gameId': _gameModel!.gameId,
-  //           'winner': winner,
-  //           'winnerId': _isWhiterPlayer
-  //               ? winner == 'White'
-  //                   ? _gameModel!.gameCreatorUid
-  //                   : _gameModel!.userId
-  //               : winner == 'Black'
-  //                   ? _gameModel!.gameCreatorUid
-  //                   : _gameModel!.userId,
-  //         }),
-  //       };
-  //       // Envoyer via WebSocket
-  //       WebSocketService().sendMessage(json.encode(gameOverMessage));
-  //     }
-  //   }
-  // }
 
   void handleGameOverFriends() {
     if (game.drawn || game.gameOver) {

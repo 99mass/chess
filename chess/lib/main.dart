@@ -1,7 +1,7 @@
 import 'package:chess/provider/game_provider.dart';
 import 'package:chess/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 
 void main() async {

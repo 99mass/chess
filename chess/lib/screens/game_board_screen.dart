@@ -199,26 +199,35 @@ class _GameBoardScreenState extends State<GameBoardScreen> {
 
     _gameProvider.setAiThinking(true);
 
-    int gameLevel = switch (_gameProvider.gameDifficulty) {
-      GameDifficulty.easy => 1,
-      GameDifficulty.medium => 2,
-      GameDifficulty.hard => 3,
+    // Initialisation de Stockfish
+    stockfish!.stdin = StockfishUicCommand.uci;
+    stockfish!.stdin = StockfishUicCommand.isReady;
+    stockfish!.stdin = StockfishUicCommand.uciNewGame;
+
+    // Configuration du niveau
+    final (skillLevel, timeMs) = switch (_gameProvider.gameDifficulty) {
+      GameDifficulty.easy => (0, 3000), // Niveau faible, 3 seconde
+      GameDifficulty.medium => (5, 2000), // Niveau moyen, 2 secondes
+      GameDifficulty.hard => (15, 1000), // Niveau expert, 1 secondes
     };
 
-    // Envoyer les commandes à Stockfish
+    // Configuration difficulté
+    stockfish!.stdin =
+        '${StockfishUicCommand.setOption} Skill Level value $skillLevel';
+
+    // Position actuelle
     stockfish!.stdin =
         '${StockfishUicCommand.position} ${_gameProvider.getPositionFen()}';
-    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} ${gameLevel * 100}';
 
-    // Désabonner les anciens écouteurs s'il y en a
-    _stockfishSubscription?.cancel();
+    // Démarrer l'analyse
+    stockfish!.stdin = '${StockfishUicCommand.goMoveTime} $timeMs';
 
     // Écouter les réponses de Stockfish
+    _stockfishSubscription?.cancel();
     _stockfishSubscription = stockfish!.stdout.listen((event) {
       if (event.contains(StockfishUicCommand.bestMove)) {
         final bestMove = event.split(' ')[1];
 
-        // Vérifier si le jeu est terminé ou si ce n'est pas le bon tour
         if (_gameProvider.state.state != PlayState.theirTurn) return;
 
         _gameProvider.makeStringMove(bestMove, context: context);
